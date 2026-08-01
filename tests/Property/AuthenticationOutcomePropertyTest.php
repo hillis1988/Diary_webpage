@@ -112,14 +112,14 @@ final class AuthenticationOutcomePropertyTest extends TestCase
                 $pdo = SqliteAuthTables::connection();
                 $clock = FixedClock::at(self::CLOCK_START);
                 $users = new UserRepository($pdo);
-                // bcrypt regardless of what this build prefers: Argon2id's memory
-                // cost would dominate a hundred runs, and the algorithm is not what
-                // this property is about.
+                // The test-only hasher regardless of what this build prefers: real
+                // work factors would dominate a hundred runs, and the algorithm is
+                // not what this property is about.
                 $service = new AuthService(
                     $users,
                     new DefaultPasswordPolicy(),
                     $clock,
-                    new PasswordHasher(PASSWORD_BCRYPT),
+                    PasswordHasher::forTests(),
                     new SessionRepository($pdo),
                     new AuditLogRepository($pdo),
                     new IpHasher('property-test-ip-key'),

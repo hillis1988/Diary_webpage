@@ -14,13 +14,13 @@ namespace Diary\Http;
  *   1. HTTPS redirect        - nothing else runs on a plaintext connection
  *   2. Security headers      - present on every response, including the redirect above
  *   3. CSRF check            - a state-changing request with no fresh token never reaches a handler
- *   4. Session resolution    - produces the SecurityContext (task 7.2)
+ *   4. Session resolution    - produces the SecurityContext ({@see SessionResolverMiddleware})
  *   5. Authorisation         - the permission matrix decides (task 8.1)
  *   6. Handler               - the router, and only then a controller
  *
- * Session resolution and authorisation are not built yet. {@see fixedOrder()} takes
- * them as nullable arguments so they slot into their place when they arrive, rather
- * than being appended wherever there happens to be room.
+ * Authorisation is not built yet. {@see fixedOrder()} takes both of the middle stages
+ * as nullable arguments so they slot into their place when they arrive, rather than
+ * being appended wherever there happens to be room.
  */
 final class Pipeline implements RequestHandler
 {

@@ -35,9 +35,9 @@ use PHPUnit\Framework\TestCase;
  * `DateTimeImmutable`, so "half an hour of inactivity" is arithmetic rather than
  * waiting.
  *
- * Each run signs in once - bcrypt is the only expensive thing here, so it happens
- * a single time - and then drives four cheap phases against sessions of that one
- * account:
+ * Each run signs in once - password hashing is the only expensive thing here, so it
+ * happens a single time - and then drives four cheap phases against sessions of that
+ * one account:
  *
  *   1. the boundary, four times over: at 29:59 and at a generated instant strictly
  *      inside the window the session resolves, and at 30:00 and a generated instant
@@ -146,9 +146,9 @@ final class SessionValidityPropertyTest extends TestCase
                     $users,
                     new DefaultPasswordPolicy(),
                     $clock,
-                    // bcrypt whatever this build prefers: the property is about the
-                    // clock, and Argon2id's memory cost would dominate the run.
-                    new PasswordHasher(PASSWORD_BCRYPT),
+                    // The test-only hasher whatever this build prefers: the property
+                    // is about the clock, and real work factors would dominate the run.
+                    PasswordHasher::forTests(),
                     $sessions,
                     new AuditLogRepository($pdo),
                     new IpHasher('property-test-ip-key'),

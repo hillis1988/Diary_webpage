@@ -196,13 +196,14 @@ final class OwnerRegistrationPropertyTest extends TestCase
         $this->pdo = SqliteUsersTable::connection();
         $this->clock = FixedClock::at(self::CLOCK_START);
         $this->users = new UserRepository($this->pdo);
-        // bcrypt rather than the preferred Argon2id: a hundred registrations of
-        // real work each, and this property is not about the algorithm.
+        // The test-only hasher rather than the preferred Argon2id: a hundred
+        // registrations of real work each, and this property is not about the
+        // algorithm - which algorithm production picks is PasswordHasherTest.
         $this->auth = new AuthService(
             $this->users,
             $this->policy,
             $this->clock,
-            new PasswordHasher(PASSWORD_BCRYPT)
+            PasswordHasher::forTests()
         );
 
         self::assertSame([], SqliteUsersTable::snapshot($this->pdo));

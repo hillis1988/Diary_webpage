@@ -11,8 +11,8 @@ namespace Diary\Auth;
  * code that writes a row and the code that reads one, and so no caller can smuggle
  * user-supplied text - let alone diary content - into the action column.
  *
- * Authentication contributes the three below; later tasks add viewer grants and
- * revocations, denied operations and deletions.
+ * Authentication contributes the first three below and authorisation the fourth;
+ * later tasks add viewer grants and revocations, and deletions.
  */
 enum AuditAction: string
 {
@@ -24,4 +24,12 @@ enum AuditAction: string
 
     /** The fifth consecutive failure locked the account (Requirement 2.3). */
     case AccountLocked = 'account_locked';
+
+    /**
+     * A signed-in context attempted something the permission matrix refuses -
+     * in practice, a mutation from a viewer context (Requirements 3.3, 7.3, 7.5,
+     * 10.5). The row names the kind of record aimed at in `target_type`, never any
+     * of its content.
+     */
+    case OperationDenied = 'operation_denied';
 }

@@ -4,7 +4,9 @@
 
 Implementation follows the layering in the design: support primitives and schema first, then the encryption layer (because every sensitive write depends on it), then authentication and the authorisation pipeline, then the diary/AI/milestone/calendar/summary features, and finally viewer management, deletion, cron endpoints and deployment hardening.
 
-Stack per the design document: PHP 8.2+, MariaDB via PDO with prepared statements, server-rendered templates, Composer with `vendor/` committed, PHPUnit for unit and integration tests, and Eris for the 26 property-based tests. Each correctness property from the design is implemented by exactly one property test running at least 100 iterations and carrying the `// Feature: mental-health-diary, Property N: ...` comment tag.
+Stack per the design document: PHP 8.2+, MariaDB via PDO with prepared statements, server-rendered templates, Composer with `vendor/` committed, PHPUnit for unit and integration tests, and Eris for the 5 property-based tests. Each correctness property from the design is implemented by exactly one property test running at least 100 iterations and carrying the `// Feature: mental-health-diary, Property N: ...` comment tag; everything else in the design's original 26-property list is covered by example-based unit or integration tests instead, per the "Scope of the property set" section of design.md. Property tests inject a fast test-only password hasher rather than hashing in the loop, so the whole Property suite runs in a few seconds.
+
+Registration and authentication already have property tests in place (Properties 1-7 below) from before this trim. They are correct and stay as properties; the trim applies going forward to the diary/AI/milestone/calendar/summary/viewer/deletion work.
 
 ## Tasks
 
@@ -112,222 +114,223 @@ Stack per the design document: PHP 8.2+, MariaDB via PDO with prepared statement
 - [x] 6. Checkpoint - authentication foundation
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. HTTP pipeline and transport security
+- [x] 7. HTTP pipeline and transport security
   - [x] 7.1 Implement router, TLS guard, security headers and CSRF middleware
     - Front controller runs middleware in fixed order: HTTPS redirect, security headers, CSRF check, session resolution, authorisation, handler
     - Redirect plaintext HTTP to HTTPS before any handler runs; add `.htaccess` redirect; emit `Strict-Transport-Security`, `Content-Security-Policy` (no inline script, no third-party origins), `X-Content-Type-Options`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY` on every response
     - Reject a missing or stale CSRF token with the form-expired message and no write
     - _Requirements: 4.3_
 
-  - [ ] 7.2 Implement SessionResolver middleware producing the SecurityContext
+  - [x] 7.2 Implement SessionResolver middleware producing the SecurityContext
     - Resolve the cookie token to `SecurityContext { userId, contextRole, dataOwnerId }`; treat an unresolvable, terminated or idle session as anonymous (fail closed)
     - _Requirements: 2.5, 2.6_
 
-- [ ] 8. Access control and home page
-  - [ ] 8.1 Implement Access_Control_Service with the declarative permission matrix
+- [x] 8. Access control and home page
+  - [x] 8.1 Implement Access_Control_Service with the declarative permission matrix
     - Encode the permission matrix as a single table keyed on operation kind and context role; `authorise` redirects anonymous requests on protected routes to the login page preserving the intended path, denies mutations from a viewer context with the read-only message and a 403, and logs denials
     - `resolveDataOwner` is the only sanctioned source of owner scoping and returns the session's `dataOwnerId`
     - Allow login and registration paths for anonymous requests
     - _Requirements: 2.6, 3.3, 4.4, 5.6, 7.3, 7.5, 10.5_
 
-  - [ ] 8.2 Write property test for anonymous redirection
+  - [x] 8.2 Write property test for anonymous redirection
     - **Property 8: Unauthenticated requests are redirected to login**
     - **Validates: Requirements 2.6**
 
-  - [ ] 8.3 Write property test for viewer-context immutability
-    - **Property 9: A viewer context can never change stored state**
+  - [x] 8.3 Write property test for viewer-context immutability
+    - **Property 1: A viewer context can never change stored state**
     - **Validates: Requirements 3.3, 5.6, 7.3, 7.5, 10.5**
 
-  - [ ] 8.4 Implement navigationFor and the home page
+  - [x] 8.4 Implement navigationFor and the home page
     - `navigationFor` returns exactly the controls permitted by the matrix for the session's context role, omitting diary-entry and milestone creation controls in a viewer context
     - Render the home page with the banner text "Roy Hillis personal diary" and links to the diary entry page, calendar, summary page and milestones
     - _Requirements: 3.1, 3.2, 3.3_
 
-  - [ ] 8.5 Write property test for role-appropriate navigation
-    - **Property 10: Navigation reflects the session's context role**
+  - [x] 8.5 Write unit tests for role-appropriate navigation
+    - Cover anonymous, viewer and owner contexts; assert each gets exactly what `navigationFor` allows and a viewer never sees a diary-entry or milestone creation control
     - **Validates: Requirements 3.2**
 
-  - [ ] 8.6 Write integration tests for middleware ordering and headers
+  - [x] 8.6 Write integration tests for middleware ordering and headers
     - Assert TLS redirect precedes headers, headers precede session resolution, session resolution precedes authorisation, authorisation precedes the handler; assert no application body is emitted over plaintext HTTP
     - _Requirements: 2.6, 4.3_
 
 - [ ] 9. Structured diary entry capture
-  - [ ] 9.1 Define the question set and diary input validation
+  - [x] 9.1 Define the question set and diary input validation
     - Define the structured question set as data: mood rating (1-10, required), sleep quality (1-5 ordinal, optional), notable events, thoughts, emotions; the form, validation and AI prompt all read this definition
     - Validate the whole input before any write; reject a missing or out-of-range mood rating with the message naming the mood rating field and preserve submitted answers for redisplay
     - _Requirements: 5.1, 5.2, 5.5_
 
-  - [ ] 9.2 Write property test for mood rating validation
-    - **Property 14: Mood rating validation gates every write**
+  - [x] 9.2 Write unit tests for mood rating validation
+    - Cover a missing rating, each boundary (0, 1, 10, 11), and non-integer input; assert the whole submission is rejected with no write and the message names the mood rating field
     - **Validates: Requirements 5.2, 5.5**
 
-  - [ ] 9.3 Implement DiaryEntryRepository and Diary_Service submission
+  - [x] 9.3 Implement DiaryEntryRepository and Diary_Service submission
     - Owner-scoped, encrypted upsert keyed on `(owner_id, entry_date)` inside a transaction so a second submission for a date updates rather than duplicates
     - Implement `findByDate`, `findInRange`, `datesWithEntries`, each taking an `OwnerId` resolved by Access_Control_Service and binding it as a SQL parameter
     - _Requirements: 5.3, 5.4, 4.4_
 
-  - [ ] 9.4 Write property test for one entry per date
-    - **Property 15: Exactly one entry per date, holding the last accepted submission**
+  - [-] 9.4 Write property test for one entry per date
+    - **Property 4: Exactly one entry per date, holding the last accepted submission**
     - **Validates: Requirements 5.3, 5.4, 6.4, 8.2**
 
-  - [ ] 9.5 Implement the diary entry page and controller
+  - [-] 9.5 Implement the diary entry page and controller
     - Render the question set as an accessible form, restrict create and modify to an owner context, redisplay the entry with its recommendation after submission
     - _Requirements: 5.1, 5.3, 5.6, 8.2_
 
 - [ ] 10. AI CBT feedback on entry
-  - [ ] 10.1 Implement the FeedbackProvider adapter and prompt builder
+  - [-] 10.1 Implement the FeedbackProvider adapter and prompt builder
     - Provider-agnostic HTTPS adapter requesting strict JSON, 20-second timeout, one retry, throwing `ProviderError` on failure
     - Prompts are pseudonymised: entry content and derived metrics only, never account identifiers, email addresses or names
     - Honour the configuration switch that disables AI entirely
     - _Requirements: 6.1_
 
-  - [ ] 10.2 Implement AI_Feedback_Service with shape validation and retry
+  - [~] 10.2 Implement AI_Feedback_Service with shape validation and retry
     - Run after the entry is committed and outside its transaction; accept a response only when it carries exactly one non-empty positive focus and one non-empty suggested change, otherwise record `status = 'failed'` and return `Unavailable`
     - Store the accepted recommendation encrypted and linked to the entry with `provider`, `model`, `attempt_count`, `generated_at`; expose a retry control that re-invokes the provider
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-  - [ ] 10.3 Write property test for feedback input scoping
-    - **Property 16: Feedback generation is driven by the entry's own content**
+  - [~] 10.3 Write unit tests for feedback input scoping
+    - Assert the prompt sent to the provider contains only the entry's own content and derived metrics, and a snapshot test proves no account identifier, email address or name is ever included
     - **Validates: Requirements 6.1**
 
-  - [ ] 10.4 Write property test for recommendation shape validation
-    - **Property 17: A recommendation is accepted only with one positive focus and one suggested change**
+  - [~] 10.4 Write unit tests for recommendation shape validation
+    - Cover an empty positive focus, an empty suggested change, extra fields, and malformed JSON; each is treated as a failure rather than partially stored
     - **Validates: Requirements 6.2, 6.3**
 
-  - [ ] 10.5 Write property test for feedback failure isolation
-    - **Property 18: Feedback failure never costs the entry**
+  - [~] 10.5 Write unit tests for feedback failure isolation
+    - Assert a provider timeout or error still commits the diary entry, records `status = 'failed'`, and the retry control re-invokes the provider without duplicating the entry
     - **Validates: Requirements 6.5**
 
-  - [ ] 10.6 Implement the shared medical disclaimer partial and feedback rendering
+  - [~] 10.6 Implement the shared medical disclaimer partial and feedback rendering
     - Single view partial used by every AI surface; render the recommendation, or the "feedback is temporarily unavailable" notice plus retry control on failure
     - _Requirements: 6.5, 6.6_
 
-- [ ] 11. Checkpoint - diary and feedback loop
+- [~] 11. Checkpoint - diary and feedback loop
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 12. Significant milestones
-  - [ ] 12.1 Implement Milestone_Service and repository
+  - [~] 12.1 Implement Milestone_Service and repository
     - Owner-scoped encrypted create, update, delete and `inRange`; category restricted to the closed set `medication`, `relationship`, `lifestyle`, `other`
     - Reject a blank or missing description, a missing date, or a category outside the set, naming each offending field and writing nothing
     - Restrict all mutations to an owner context
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 
-  - [ ] 12.2 Write property test for milestone operations
-    - **Property 25: Milestone operations match an in-memory model**
+  - [~] 12.2 Write unit tests for milestone operations
+    - Cover create, update and delete for each category in the closed set, and confirm `inRange` returns exactly the milestones whose date falls inside the given range
     - **Validates: Requirements 10.1, 10.2, 10.3**
 
-  - [ ] 12.3 Write property test for invalid milestone input
-    - **Property 26: Invalid milestone input is rejected without writing**
+  - [~] 12.3 Write unit tests for invalid milestone input
+    - Cover a blank description, a missing description, a missing date and a category outside the closed set; assert each is rejected, names the offending field, and writes nothing
     - **Validates: Requirements 10.4**
 
-  - [ ] 12.4 Implement milestone pages and controller
+  - [~] 12.4 Implement milestone pages and controller
     - List, create, edit and delete views with the category selector; controls hidden and requests denied in a viewer context
     - _Requirements: 10.1, 10.2, 10.3, 10.5_
 
 - [ ] 13. Calendar view of history
-  - [ ] 13.1 Implement calendarMonth and the Calendar_View
+  - [~] 13.1 Implement calendarMonth and the Calendar_View
     - Build `CalendarMonth` from the session's data owner's entry dates and milestone dates for the month; render a date-based layout with entry indicators and milestone indicators
     - Selecting a date with an entry shows that entry and its recommendation; selecting a date without one shows the no-entry message
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [ ] 13.2 Write property test for calendar indicators
-    - **Property 21: Calendar indicators match stored data exactly**
+  - [~] 13.2 Write unit tests for calendar indicators
+    - Cover a month with entries, milestones, both, and neither; a date with no entry shows the no-entry message; assert indicators only ever come from the resolved data owner
     - **Validates: Requirements 8.1, 8.3, 8.4, 8.5**
 
 - [ ] 14. AI progress summary
-  - [ ] 14.1 Implement TrendCalculator
+  - [~] 14.1 Implement TrendCalculator
     - Deterministic count, mean, minimum, maximum for mood and sleep series, tolerating missing sleep values; direction from a least-squares slope mapped to improving, declining or stable
     - _Requirements: 9.2_
 
-  - [ ] 14.2 Write property test for trend metrics
-    - **Property 23: Trend metrics equal a reference computation**
+  - [~] 14.2 Write property test for trend metrics
+    - **Property 5: Trend metrics equal a reference computation**
     - **Validates: Requirements 9.2**
 
-  - [ ] 14.3 Implement SummaryProvider adapter and AI_Summary_Service
+  - [~] 14.3 Implement SummaryProvider adapter and AI_Summary_Service
     - Gather exactly the data owner's entries and milestones whose dates fall within the inclusive selected range; hand computed metrics to the provider as facts to narrate
     - Check the entry count first: fewer than three yields `InsufficientData` before calling the provider; with three or more a provider failure yields `Unavailable`; otherwise return the summary with metrics
     - Relate trends to in-range milestones in the summary input
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 
-  - [ ] 14.4 Write property test for summary input scoping
-    - **Property 22: Summary input contains exactly the in-range data**
+  - [~] 14.4 Write unit tests for summary input scoping
+    - Assert entries and milestones outside the selected range, or belonging to another owner, are never included in what is handed to the provider
     - **Validates: Requirements 9.1, 9.3**
 
-  - [ ] 14.5 Write property test for summary outcome precedence
-    - **Property 24: Summary outcome follows the decision table, with insufficient data taking precedence**
+  - [~] 14.5 Write unit tests for summary outcome precedence
+    - Cover fewer than 3 entries with a working provider, fewer than 3 entries with a failing provider, and 3+ entries with a failing provider; assert insufficient-data always wins when it applies
     - **Validates: Requirements 9.4, 9.5**
 
-  - [ ] 14.6 Implement the summary page with date range selection
+  - [~] 14.6 Implement the summary page with date range selection
     - Range picker, rendered trend metrics for mood and sleep, narrative or the more-entries-needed / temporarily-unavailable message, disclaimer partial rendered whenever the service is invoked
     - _Requirements: 9.1, 9.2, 9.4, 9.5, 9.6_
 
-  - [ ] 14.7 Write property test for the medical disclaimer
-    - **Property 19: Every AI surface carries the medical disclaimer**
+  - [~] 14.7 Write unit tests for the medical disclaimer
+    - Assert the shared disclaimer partial renders on the entry feedback view and the summary page, in every outcome branch of each
     - **Validates: Requirements 6.6, 9.6**
 
 - [ ] 15. Read-only viewer accounts
-  - [ ] 15.1 Implement viewer creation and revocation
+  - [~] 15.1 Implement viewer creation and revocation
     - `createViewer` from an owner context creates a `viewer` account with `data_owner_id` set to the Primary_User and `status = 'invited'`, issuing a single-use invitation token; the viewer sets a password satisfying the same policy, moving them to `active`
     - `revokeViewer` sets `status = 'revoked'` and terminates that viewer's live sessions immediately, blocking further reads and re-authentication
     - Restrict both operations to an owner context and record them in `audit_log`
     - _Requirements: 7.1, 7.4, 7.5_
 
-  - [ ] 15.2 Write property test for granting and revoking viewer access
-    - **Property 20: Granting and revoking viewer access are inverses**
+  - [~] 15.2 Write unit tests for granting and revoking viewer access
+    - Cover invite -> set password -> active, and active -> revoke -> blocked from further reads and re-authentication; assert each step is recorded in `audit_log`
     - **Validates: Requirements 7.1, 7.4**
 
-  - [ ] 15.3 Write property test for owner-scoped reads
-    - **Property 12: Reads are scoped to the session's data owner**
+  - [~] 15.3 Write property test for owner-scoped reads
+    - **Property 2: Reads are scoped to the session's data owner**
     - **Validates: Requirements 4.4, 7.2, 8.5**
 
-  - [ ] 15.4 Implement viewer management page
+  - [~] 15.4 Implement viewer management page
     - Owner-only page listing viewers with their status, invite form and revoke control
     - _Requirements: 7.1, 7.4, 7.5_
 
 - [ ] 16. Account deletion and cron endpoints
-  - [ ] 16.1 Implement PurgeService
+  - [~] 16.1 Implement PurgeService
     - `requestDeletion` sets `deletion_requested_at`, records a `purge_jobs` row, and purges immediately in one transaction: recommendations, entries, milestones, linked viewer accounts, sessions, then the user row
     - Strip audit rows of references to deleted content; leave the `purge_jobs` row on failure; `runPurgeSlice` retries outstanding jobs idempotently within a bounded limit
     - _Requirements: 4.5_
 
-  - [ ] 16.2 Write property test for account deletion
-    - **Property 13: Account deletion removes every trace of the account's data**
+  - [~] 16.2 Write unit tests for account deletion
+    - Assert a purge removes every recommendation, entry, milestone, linked viewer account and session for the owner, strips audit rows of references to the deleted content, and a failed step leaves a `purge_jobs` row for the daily cron to retry
     - **Validates: Requirements 4.5**
 
-  - [ ] 16.3 Implement cron endpoints
+  - [~] 16.3 Implement cron endpoints
     - `/cron/purge` (daily), `/cron/sessions` (hourly), `/cron/keys` (on demand), each requiring a shared secret compared in constant time, idempotent, and self-limiting well inside 60 seconds
     - `/cron/keys` re-encrypts a slice of rows onto the current DEK and retires superseded keys only when unreferenced
     - _Requirements: 4.2, 4.5_
 
-  - [ ] 16.4 Write integration tests for cron endpoints
+  - [~] 16.4 Write integration tests for cron endpoints
     - Reject missing or wrong tokens, verify idempotence and bounded work per run
     - _Requirements: 4.2, 4.5_
 
-- [ ] 17. Checkpoint - full feature set
+- [~] 17. Checkpoint - full feature set
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 18. Deployment hardening and message coverage
-  - [ ] 18.1 Add deployment artefacts and the transport smoke check script
+  - [~] 18.1 Add deployment artefacts and the transport smoke check script
     - `.htaccess` for the `public/` document root (HTTPS redirect, deny access to dotfiles), documented restrictive permissions for `config/config.php`, and a script asserting TLS 1.2+ negotiation, HSTS, security headers and the HTTP-to-HTTPS redirect against a target host
     - _Requirements: 4.3_
 
-  - [ ] 18.2 Write unit tests for fixed content and error catalogue wording
+  - [~] 18.2 Write unit tests for fixed content and error catalogue wording
     - Home page banner text, the structured question set, prompt construction snapshots proving no identifiers are included, and the exact wording of every user-facing message in the error catalogue
     - _Requirements: 3.1, 5.1, 1.2, 1.3, 2.2, 2.3, 2.5, 3.3, 5.5, 6.5, 9.4, 9.5, 10.4_
 
-  - [ ] 18.3 Write end-to-end integration journeys with a stubbed provider
+  - [~] 18.3 Write end-to-end integration journeys with a stubbed provider
     - Register, sign in, submit an entry, view feedback, add a milestone, browse the calendar, generate a summary, invite and revoke a viewer, delete the account; assert the unique index prevents duplicate entries under concurrent submission
     - _Requirements: 1.1, 2.1, 5.3, 5.4, 6.1, 8.1, 9.1, 7.1, 7.4, 4.5_
 
-- [ ] 19. Final checkpoint
+- [~] 19. Final checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
 - Each task references specific requirements for traceability
-- Property tests use Eris with at least 100 iterations each and the `// Feature: mental-health-diary, Property N: ...` comment tag; time is injected via `Clock` and AI providers are stubbed, so no property test makes a network call or sleeps
-- State-changing property tests (9, 13, 14, 26) assert against a full database snapshot so an unexpected write anywhere is caught
+- Only 5 correctness properties remain (see design.md's "Scope of the property set"): viewer-context immutability (8.3), owner-scoped reads (15.3), encryption at rest (3.2, done), one entry per date (9.4), and trend metrics (14.2). Registration and authentication (tasks 4 and 5) keep the property tests already written for them as a pre-existing exception; nothing else in the plan uses a property test.
+- Property tests use Eris with at least 100 iterations each and the `// Feature: mental-health-diary, Property N: ...` comment tag; time is injected via `Clock`, AI providers are stubbed, and a fast test-only password hasher stands in for Argon2id, so no property test makes a network call, sleeps, or hashes in the loop
+- The state-changing property tests (viewer-context immutability, one entry per date) assert against a full database snapshot so an unexpected write anywhere is caught
 - Requirement 4.3 (TLS negotiation) and the qualitative half of Requirement 6.3 are verified by the smoke check script and manual release review rather than by properties
 - The signed data processing agreement with the AI provider and the record of processing activities entry are deployment prerequisites outside the scope of these coding tasks
 

@@ -2,23 +2,31 @@
 
 declare(strict_types=1);
 
+use Diary\Access\AccessControlService;
 use Diary\Auth\AuditLogRepository;
 use Diary\Auth\AuthService;
 use Diary\Auth\DefaultPasswordPolicy;
 use Diary\Auth\IpHasher;
 use Diary\Auth\SessionRepository;
 use Diary\Auth\UserRepository;
+use Diary\Diary\DiaryEntryRepository;
+use Diary\Diary\DiaryInputValidator;
+use Diary\Diary\DiaryService;
+use Diary\Http\AuthorisationMiddleware;
 use Diary\Http\CsrfGuard;
 use Diary\Http\CsrfMiddleware;
+use Diary\Http\DiaryEntryController;
+use Diary\Http\HomePageController;
 use Diary\Http\HttpsRedirectMiddleware;
 use Diary\Http\Pipeline;
 use Diary\Http\Request;
-use Diary\Http\Response;
 use Diary\Http\Router;
 use Diary\Http\SecurityHeadersMiddleware;
 use Diary\Http\SessionResolverMiddleware;
-use Diary\Http\StatusPage;
 use Diary\Storage\ConnectionFactory;
+use Diary\Storage\Crypto;
+use Diary\Storage\KeyRing;
+use Diary\Storage\PayloadCodec;
 use Diary\Storage\StorageException;
 use Diary\Support\SystemClock;
 
@@ -32,9 +40,7 @@ use Diary\Support\SystemClock;
  *   4. Assemble the middleware pipeline in its fixed order and hand it the request.
  *
  * The order in Pipeline::fixedOrder() is the design's request pipeline: HTTPS redirect,
- * security headers, CSRF check, session resolution, authorisation, handler. Authorisation
- * (task 8.1) is not built yet and is passed as null; nothing else about the wiring changes
- * when it arrives.
+ * security headers, CSRF check, session resolution, authorisation, handler.
  */
 
 const DIARY_ROOT = __DIR__ . '/..';
@@ -126,24 +132,42 @@ $authService = new AuthService(
     ipHasher: new IpHasher(hash_hkdf('sha256', $masterKey, 32, 'diary-ip-hash-v1')),
 );
 
+$accessControl = new AccessControlService(
+    clock: $clock,
+    auditLog: new AuditLogRepository($pdo),
+    ipHasher: new IpHasher(hash_hkdf('sha256', $masterKey, 32, 'diary-ip-hash-v1')),
+);
+
 $request = Request::fromGlobals($_SERVER, $_GET, $_POST, $_COOKIE, $trustForwardedProto);
+
+$csrfGuard = CsrfGuard::withMasterKey($masterKey, $clock);
+
+$keyRing = new KeyRing($pdo, $masterKey, $clock);
+$diaryEntryRepository = new DiaryEntryRepository($pdo, new PayloadCodec(new Crypto($keyRing)));
+$diaryService = new DiaryService($diaryEntryRepository);
 
 $router = new Router();
 
-// Routes are registered here as controllers arrive. Until the home page exists (task 8.2),
-// one placeholder page keeps the pipeline end-to-end verifiable on the deployed site.
-$router->get('/', static fn (Request $r, array $params): Response => StatusPage::response(
-    200,
-    'Roy Hillis personal diary',
-    'The application is being set up. Pages become available as the build progresses.'
-));
+// Routes are registered here as controllers arrive.
+$homePage = new HomePageController($accessControl);
+$router->get('/', static fn (Request $r, array $params) => $homePage->show($r));
+
+$diaryEntryPage = new DiaryEntryController(
+    $accessControl,
+    $diaryService,
+    new DiaryInputValidator(),
+    $csrfGuard,
+    $clock,
+);
+$router->get(AccessControlService::DIARY_ENTRY_PATH, static fn (Request $r, array $params) => $diaryEntryPage->show($r));
+$router->post(AccessControlService::DIARY_ENTRY_PATH, static fn (Request $r, array $params) => $diaryEntryPage->submit($r));
 
 $pipeline = Pipeline::fixedOrder(
     new HttpsRedirectMiddleware($baseUrl, $forceHttps),
     new SecurityHeadersMiddleware(),
-    new CsrfMiddleware(CsrfGuard::withMasterKey($masterKey, $clock)),
+    new CsrfMiddleware($csrfGuard),
     new SessionResolverMiddleware($authService, $clock),
-    null, // task 8.1: authorisation middleware, applying the permission matrix
+    new AuthorisationMiddleware($accessControl),
     $router,
 );
 

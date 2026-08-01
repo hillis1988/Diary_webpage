@@ -506,172 +506,63 @@ SummaryOutcome   = Summary(text, metrics) | InsufficientData | Unavailable(reaso
 
 *A property is a characteristic or behavior that should hold true across all valid executions of a system-essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
 
-This feature suits property-based testing well: the security-critical parts (password policy, lockout counting, session expiry, role scoping, encryption, upsert-by-date, calendar derivation, trend metrics, summary precedence) are pure or near-pure functions over large input spaces, and they are exactly the places where a hand-picked example passes while a boundary case leaks health data.
+This design applies property-based testing narrowly. Five properties cover the places where a defect does irreversible harm — leaking UK GDPR special category health data, silently losing a diary entry, or misreporting a clinical trend. Those are pure or near-pure functions over large input spaces, and exactly where a hand-picked example passes while a boundary case fails. Everything else is covered by example-based unit tests; the reasoning is recorded in [Scope of the property set](#scope-of-the-property-set) below.
 
-Several acceptance criteria are deliberately not expressed as properties: TLS version negotiation (Requirement 4.3) is hosting configuration verified by a smoke check, the fixed banner text and question set (Requirements 3.1, 5.1) are single examples, and the judgement that a suggested change is "small and meaningful" (Requirement 6.3) is reviewed by a human rather than asserted.
+Some acceptance criteria could not be properties at all: TLS version negotiation (Requirement 4.3) is hosting configuration verified by a smoke check, the fixed banner text and question set (Requirements 3.1, 5.1) are single examples, and the judgement that a suggested change is "small and meaningful" (Requirement 6.3) is reviewed by a human rather than asserted. Every other acceptance criterion not listed under a property below is a deliberate choice to cover it with example-based unit tests, integration tests, or the deployment smoke check; no requirement loses coverage.
 
-### Property 1: Password policy is exactly as specified
-
-*For any* string, the password policy accepts it if and only if it is at least 12 characters long and contains at least one letter and at least one digit; when it is rejected the response describes the policy and no account is created.
-
-**Validates: Requirements 1.3, 1.5**
-
-### Property 2: Valid registration creates an Owner_Role account
-
-*For any* valid email address and any policy-compliant password, registration creates exactly one account holding the Owner_Role whose data owner is itself, retrievable by the normalised form of that email.
-
-**Validates: Requirements 1.1**
-
-### Property 3: Email uniqueness is case- and whitespace-insensitive
-
-*For any* registered email address and any variation of it differing only in letter case or surrounding whitespace, a second registration is rejected with the already-registered message, exactly one account remains, and the existing account's stored credentials are unchanged.
-
-**Validates: Requirements 1.2**
-
-### Property 4: Passwords are stored only as salted one-way hashes
-
-*For any* policy-compliant password, the stored credential verifies against that password, is not equal to it, does not contain it as a substring, and differs between two accounts that chose the same password; and *for any* rejected registration, no credential is stored at all.
-
-**Validates: Requirements 1.4**
-
-### Property 5: Authentication outcome follows credential validity
-
-*For any* account, authenticating with its correct password establishes exactly one session whose context role and data owner equal that account's role and data owner, and authenticating with any non-matching password or any unregistered email establishes no session and returns the same incorrect-credentials message.
-
-**Validates: Requirements 2.1, 2.2**
-
-### Property 6: Lockout after five consecutive failures lasts fifteen minutes
-
-*For any* sequence of authentication attempts against one account, the account is locked exactly when five consecutive failures have occurred since the last success or lock expiry, remains locked until exactly fifteen minutes after the fifth failure, and a successful authentication resets the consecutive-failure count to zero.
-
-**Validates: Requirements 2.3**
-
-### Property 7: A session is valid only while it is neither signed out nor idle for thirty minutes
-
-*For any* session and any sequence of idle intervals, the session resolves to an authenticated context if and only if it has not been signed out and no interval since its last activity has reached thirty minutes; each successful resolution moves the idle window forward, and after sign-out the same token never resolves again.
-
-**Validates: Requirements 2.4, 2.5**
-
-### Property 8: Unauthenticated requests are redirected to login
-
-*For any* request path, an unauthenticated request is redirected to the login page unless the path is the login page or the registration page.
-
-**Validates: Requirements 2.6**
-
-### Property 9: A viewer context can never change stored state
+### Property 1: A viewer context can never change stored state
 
 *For any* mutating operation (creating, updating or deleting a Diary_Entry, Milestone, Viewer account, or account) and *for any* session whose context role is Viewer -- including a session belonging to an Owner_Role user who signed in to a viewer account -- the operation is denied with the read-only message and a snapshot of all stored data is identical before and after the request.
 
 **Validates: Requirements 3.3, 5.6, 7.3, 7.5, 10.5**
 
-### Property 10: Navigation reflects the session's context role
-
-*For any* authenticated session, the rendered navigation contains exactly the controls permitted for that session's context role by the permission matrix, and contains no diary-entry or milestone creation control when the context role is Viewer.
-
-**Validates: Requirements 3.2**
-
-### Property 11: Special category data is never stored in plaintext
-
-*For any* Diary_Entry content and *for any* Milestone content, persisting then reading it back yields the original values, the raw stored bytes contain none of those plaintext values, the cipher used is AES-256-GCM, and any modification of the ciphertext, nonce, or record binding causes a decryption failure rather than returning altered data.
-
-**Validates: Requirements 4.1, 4.2**
-
-### Property 12: Reads are scoped to the session's data owner
+### Property 2: Reads are scoped to the session's data owner
 
 *For any* set of Primary_Users with entries, recommendations and milestones, and *for any* set of viewers linked to them, every read operation returns only data belonging to the requesting session's resolved data owner; active viewers receive that owner's entries, recommendations, milestones, calendar and summary, and revoked viewers receive nothing.
 
 **Validates: Requirements 4.4, 7.2, 8.5**
 
-### Property 13: Account deletion removes every trace of the account's data
+### Property 3: Special category data is never stored in plaintext
 
-*For any* account and any dataset of entries, recommendations, milestones, viewer accounts and sessions belonging to it, completing the deletion process leaves no row in any table referencing that account or its content, leaves every other account's data unchanged, and re-running the deletion process changes nothing further.
+*For any* Diary_Entry content and *for any* Milestone content, persisting then reading it back yields the original values, the raw stored bytes contain none of those plaintext values, the cipher used is AES-256-GCM, and any modification of the ciphertext, nonce, or record binding causes a decryption failure rather than returning altered data.
 
-**Validates: Requirements 4.5**
+**Validates: Requirements 4.1, 4.2**
 
-### Property 14: Mood rating validation gates every write
-
-*For any* diary submission, it is accepted if and only if the mood rating is an integer from 1 to 10 inclusive; a rejected submission leaves all stored data unchanged (including any pre-existing entry for that date) and returns a message identifying the mood rating field.
-
-**Validates: Requirements 5.2, 5.5**
-
-### Property 15: Exactly one entry per date, holding the last accepted submission
+### Property 4: Exactly one entry per date, holding the last accepted submission
 
 *For any* sequence of accepted diary submissions for a single owner and date, exactly one Diary_Entry exists for that owner and date, its content equals the last submission in the sequence, and retrieving that date returns that entry together with its own associated CBT_Recommendation and no other entry's recommendation.
 
 **Validates: Requirements 5.3, 5.4, 6.4, 8.2**
 
-### Property 16: Feedback generation is driven by the entry's own content
-
-*For any* submitted Diary_Entry, the content passed to the feedback provider consists of exactly that entry's structured answers and contains no account identifier, email address or user name, and a recommendation record linked to that entry exists afterwards regardless of the provider's outcome.
-
-**Validates: Requirements 6.1**
-
-### Property 17: A recommendation is accepted only with one positive focus and one suggested change
-
-*For any* provider response, it is accepted as a CBT_Recommendation if and only if it contains exactly one non-empty positive focus and exactly one non-empty suggested change; every other response is treated as a generation failure, and every stored recommendation therefore carries both fields non-empty.
-
-**Validates: Requirements 6.2, 6.3**
-
-### Property 18: Feedback failure never costs the entry
-
-*For any* Diary_Entry and *for any* feedback provider failure mode (error, timeout, malformed response, or response failing shape validation), the entry remains stored and retrievable with its submitted content, and the entry view reports that feedback is temporarily unavailable.
-
-**Validates: Requirements 6.5**
-
-### Property 19: Every AI surface carries the medical disclaimer
-
-*For any* view that displays AI-generated output or invokes an AI service, and *for any* outcome of that service (generated, failed, or insufficient data), the rendered output contains the notice stating the content is automated and is not a substitute for professional medical advice.
-
-**Validates: Requirements 6.6, 9.6**
-
-### Property 20: Granting and revoking viewer access are inverses
-
-*For any* valid email address, creating a Viewer account from an Owner_Role session produces an account with the Viewer_Role whose data owner is that Primary_User and which can read that Primary_User's data once activated; revoking it denies every subsequent read, stops any live session of that viewer from resolving, and prevents re-authentication.
-
-**Validates: Requirements 7.1, 7.4**
-
-### Property 21: Calendar indicators match stored data exactly
-
-*For any* set of Diary_Entry and Milestone records across multiple owners and months, and *for any* displayed month, the calendar's entry-indicator dates equal exactly the requesting session's data owner's entry dates within that month, its milestone-indicator dates equal exactly that owner's milestone dates within that month, and selecting any date in that month without an entry yields the no-entry message.
-
-**Validates: Requirements 8.1, 8.3, 8.4, 8.5**
-
-### Property 22: Summary input contains exactly the in-range data
-
-*For any* date range and *for any* set of entries and milestones across multiple owners, the data supplied for summary generation consists of exactly the requesting session's data owner's Diary_Entry and Milestone records whose dates fall within the inclusive range, and nothing outside it.
-
-**Validates: Requirements 9.1, 9.3**
-
-### Property 23: Trend metrics equal a reference computation
+### Property 5: Trend metrics equal a reference computation
 
 *For any* series of Diary_Entry records in a date range, including series with missing sleep-quality values, the computed mood and sleep trend metrics equal the reference count, mean, minimum, maximum and direction for that series, and both metric sets appear in the rendered summary.
 
 **Validates: Requirements 9.2**
 
-### Property 24: Summary outcome follows the decision table, with insufficient data taking precedence
+### Scope of the property set
 
-*For any* combination of in-range entry count and summary provider outcome, the summary view state is: the more-entries-needed message when fewer than three entries exist, whether or not generation also fails; the temporarily-unavailable message when three or more entries exist and generation fails; and the generated summary otherwise.
+This is a single-user personal diary, so the test strategy is sized to match. The property set is held at five, and the rationale is recorded here so the decision is not re-litigated or quietly reversed.
 
-**Validates: Requirements 9.4, 9.5**
+**Why these five.** Each one guards a failure that is either irreversible or undetectable by the person using the app:
 
-### Property 25: Milestone operations match an in-memory model
+- Property 1 and Property 2 are the two ways special category health data escapes: a viewer context writing, or a read crossing an owner boundary. Both depend on the interaction of session state, route, and operation, so the input space is genuinely combinatorial.
+- Property 3 is the difference between an encrypted-at-rest diary and a plaintext one. It has to hold for every shape of content, including unicode, empty fields, and very long text.
+- Property 4 is where a diary entry gets silently lost or overwritten by the wrong record. Correctness depends on arbitrary submission sequences per date, which examples cover badly.
+- Property 5 is where a clinical trend is misreported. A mean, minimum, maximum, or slope over a series with gaps is precisely the kind of arithmetic that passes three chosen examples and fails on the fourth.
 
-*For any* sequence of valid create, update and delete operations issued from an Owner_Role session, the stored set of Milestones equals the set produced by applying the same sequence to a simple in-memory model: created milestones are retrievable with identical description, date and category, updated milestones reflect the last write, and deleted milestones are absent.
+**Why everything else is example-based.** Password policy boundaries, navigation visibility, the medical disclaimer being present, field-level validation messages, AI response shape validation, milestone CRUD, calendar indicator rendering, viewer grant and revoke, summary outcome precedence, feedback failure isolation, and anonymous redirection are all covered by example-based unit tests. Their input spaces are small and enumerable — a closed set of roles, a closed set of categories, a handful of outcome branches, a fixed set of validation messages — so a handful of examples gives the same confidence as a hundred generated ones.
 
-**Validates: Requirements 10.1, 10.2, 10.3**
+Authentication and registration correctness in particular (policy enforcement, owner account creation, email normalisation and uniqueness, hash storage, credential outcomes, lockout counting, session validity) is covered by example-based unit tests rather than properties. Property tests for those behaviours already exist and pass; they may remain in place as-is, but they are **not** counted as part of the property set above and are not maintained as properties.
 
-### Property 26: Invalid milestone input is rejected without writing
-
-*For any* milestone input whose description is absent or blank, whose date is absent, or whose category is outside the permitted set, the submission is rejected, all stored data is unchanged, and the returned message identifies each offending field.
-
-**Validates: Requirements 10.4**
+**Property tests must not hash passwords in the iteration loop.** Argon2id is deliberately slow, so a hundred iterations of real hashing makes the suite too slow to run on every change. Property tests inject a fast test-only hasher through the `PasswordHasher` interface. The production choice of Argon2id with a bcrypt fallback is covered by its own unit test, which hashes once.
 
 ## Error Handling
 
 ### Principles
 
 - **Fail closed.** Any error inside the authorisation pipeline results in denial, never a fallthrough to the handler. An unresolvable session is treated as anonymous.
-- **Validate before writing.** Every service validates its whole input before touching the database, and every multi-row change runs in a transaction, so a rejected or failed operation leaves no partial state. This is what Properties 14 and 26 assert.
+- **Validate before writing.** Every service validates its whole input before touching the database, and every multi-row change runs in a transaction, so a rejected or failed operation leaves no partial state. Diary and milestone validation rejections are asserted by unit tests that snapshot the database either side of the rejected submission.
 - **Two-audience messaging.** Users get a short, plain, non-technical message. Detail goes to a server-side log with a correlation id shown to the user. Stack traces, SQL, and provider payloads are never rendered.
 - **No health data in logs.** Logs record identifiers, actions and outcomes only. Decrypted content is never written to a log, an error page, or an exception message.
 - **Non-enumeration.** Authentication and lookup failures use uniform messages and comparable response times so they cannot be used to discover which email addresses exist.
@@ -708,8 +599,8 @@ AI calls sit outside the transaction that persists user data. The diary is fully
 
 | Layer | Tool | Scope |
 | --- | --- | --- |
-| Unit | PHPUnit | Specific examples, fixed page content, error messages, single edge cases |
-| Property | PHPUnit + [Eris](https://github.com/giorgiosironi/eris) | The 26 correctness properties above |
+| Unit | PHPUnit | Specific examples, fixed page content, error messages, single edge cases; authentication, registration, validation, rendering, CRUD and AI outcome branches |
+| Property | PHPUnit + [Eris](https://github.com/giorgiosironi/eris) | The 5 correctness properties above |
 | Integration | PHPUnit against a real MariaDB test schema | Repository SQL, transactions, purge, cron endpoints, middleware ordering |
 | Smoke / deployment | Script run against the deployed site | TLS 1.2+ negotiation, HSTS, security headers, HTTP-to-HTTPS redirect |
 
@@ -721,18 +612,25 @@ AI calls sit outside the transaction that persists user data. The diary is fully
 - Each property test carries a comment tag in this form:
 
   ```php
-  // Feature: mental-health-diary, Property 15: Exactly one entry per date, holding the last accepted submission
+  // Feature: mental-health-diary, Property 4: Exactly one entry per date, holding the last accepted submission
   ```
 
-- Time is injected through a `Clock` interface so Properties 6 and 7 can generate arbitrary elapsed intervals without sleeping.
-- AI providers are stubbed through the `FeedbackProvider` and `SummaryProvider` interfaces. Stubs record their inputs (Properties 16, 22) and can be told to fail in a generated failure mode (Properties 18, 24). No property test makes a network call.
+- No property test performs password hashing inside its iteration loop. A fast test-only `PasswordHasher` is injected instead; the production Argon2id-with-bcrypt-fallback choice has its own unit test. This keeps the property suite fast enough to run on every change.
+- Time is injected through a `Clock` interface so elapsed intervals can be generated without sleeping.
+- AI providers are stubbed through the `FeedbackProvider` and `SummaryProvider` interfaces, so no property test makes a network call.
 - Generators are shared and deliberately hostile: unicode and emoji text, empty and whitespace-only strings, very long strings, mood values inside and outside 1-10, non-integer mood values, leap days, month and year boundaries, date ranges that are inverted or zero-length, multiple owners with overlapping dates, and viewer sessions belonging to Owner_Role users.
-- State-changing properties (9, 13, 14, 26) assert against a full snapshot of the database rather than a single table, so an unexpected write anywhere is caught.
+- State-changing properties (1 and 4) assert against a full snapshot of the database rather than a single table, so an unexpected write anywhere is caught.
 
 ### Unit and integration tests
 
-Unit tests stay deliberately few, since the properties cover input breadth. They cover:
+With only five properties, unit tests carry most of the coverage. They cover:
 
+- Authentication and registration end to end as examples: policy boundaries at 11, 12 and 13 characters and with letters or digits missing, owner account creation, email normalisation and uniqueness across case and whitespace variants, hash storage (verifies, not reversible, differs for equal passwords), correct and incorrect credential outcomes, the fifth-failure lockout and its fifteen-minute expiry, sign-out, and the thirty-minute idle timeout either side of the boundary.
+- The production password hasher: Argon2id where available, bcrypt fallback otherwise, hashed once.
+- Anonymous redirection to login, and navigation contents for each context role.
+- Diary and milestone field validation: each rejection message, and no write on rejection.
+- AI response shape validation, feedback failure isolation, the medical disclaimer partial on every AI surface, and summary outcome precedence (insufficient data ahead of provider failure).
+- Milestone create, update and delete, and calendar indicator rendering for a fixed month.
 - The home page banner text (Requirement 3.1) and the structured question set (Requirement 5.1).
 - The exact wording of each user-facing message in the error catalogue.
 - Prompt construction snapshots, so a prompt change is a visible diff and cannot silently start including identifiers.

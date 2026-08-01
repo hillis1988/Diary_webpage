@@ -47,9 +47,9 @@ final class AuthServiceRegistrationTest extends TestCase
             $this->users,
             new DefaultPasswordPolicy(),
             $this->clock,
-            // bcrypt keeps the suite quick; the algorithm choice itself is
-            // covered by PasswordHasherTest.
-            new PasswordHasher(PASSWORD_BCRYPT),
+            // The test-only hasher keeps the suite quick; the algorithm choice
+            // itself is covered by PasswordHasherTest.
+            PasswordHasher::forTests(),
         );
     }
 

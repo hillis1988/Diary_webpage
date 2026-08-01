@@ -106,9 +106,10 @@ final class AccountLockoutPropertyTest extends TestCase
                     $users,
                     new DefaultPasswordPolicy(),
                     $clock,
-                    // bcrypt whatever this build prefers: Argon2id's memory cost
-                    // would dominate a run that verifies a dozen times per case.
-                    new PasswordHasher(PASSWORD_BCRYPT),
+                    // The test-only hasher whatever this build prefers: real work
+                    // factors would dominate a run that verifies a dozen times per
+                    // case, and this property is about the clock.
+                    PasswordHasher::forTests(),
                     new SessionRepository($pdo),
                     new AuditLogRepository($pdo),
                     new IpHasher('property-test-ip-key'),

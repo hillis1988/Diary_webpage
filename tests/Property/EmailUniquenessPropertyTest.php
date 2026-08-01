@@ -109,9 +109,10 @@ final class EmailUniquenessPropertyTest extends TestCase
                     new UserRepository($pdo),
                     new DefaultPasswordPolicy(),
                     $clock,
-                    // bcrypt regardless of what this PHP build prefers: Argon2id's
-                    // memory cost would dominate a hundred-run property test.
-                    new PasswordHasher(PASSWORD_BCRYPT),
+                    // The test-only hasher regardless of what this PHP build
+                    // prefers: real work factors would dominate a hundred-run
+                    // property test, and the algorithm is not what this is about.
+                    PasswordHasher::forTests(),
                 );
 
                 $first = $service->register($base, $firstPassword);
@@ -180,7 +181,7 @@ final class EmailUniquenessPropertyTest extends TestCase
                 if ($this->credentialChecks < self::CREDENTIAL_CHECKS) {
                     ++$this->credentialChecks;
 
-                    $hasher = new PasswordHasher(PASSWORD_BCRYPT);
+                    $hasher = PasswordHasher::forTests();
                     $storedHash = (string) $row['password_hash'];
 
                     self::assertTrue(

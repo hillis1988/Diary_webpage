@@ -42,14 +42,19 @@ use PHPUnit\Framework\TestCase;
  * whole property runs against an in-memory database, so nothing sleeps and
  * nothing reaches the network.
  *
+ * The hasher is {@see PasswordHasher::forTests()} - bcrypt at its minimum cost -
+ * so a hundred iterations of two registrations each stay cheap. That costs this
+ * property nothing it claims: a low-cost bcrypt hash is still salted per call and
+ * still one-way, which is exactly what the two-accounts-one-password comparison
+ * and the `password_get_info()` check below observe. Only the work factor is
+ * lowered, and *which* algorithm production picks is pinned by
+ * {@see \Diary\Tests\Unit\Auth\PasswordHasherTest} against the real defaults.
+ *
  * Requirements: 1.4.
  */
 final class PasswordHashStoragePropertyTest extends TestCase
 {
     use TestTrait;
-
-    /** bcrypt keeps the suite fast; the algorithm choice itself is a unit-test concern. */
-    private const HASH_ALGORITHM = PASSWORD_BCRYPT;
 
     private const LETTERS = ['a', 'k', 'z', 'B', 'R', 'é', 'Ж'];
     private const DIGITS = ['0', '3', '7', '9'];
@@ -85,7 +90,7 @@ final class PasswordHashStoragePropertyTest extends TestCase
 
                 $pdo = SqliteUsersTable::connection();
                 $users = new UserRepository($pdo);
-                $hasher = new PasswordHasher(self::HASH_ALGORITHM);
+                $hasher = PasswordHasher::forTests();
                 $auth = new AuthService(
                     $users,
                     $this->policy,

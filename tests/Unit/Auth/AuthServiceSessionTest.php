@@ -47,7 +47,9 @@ final class AuthServiceSessionTest extends TestCase
             $this->users,
             new DefaultPasswordPolicy(),
             $this->clock,
-            new PasswordHasher(),
+            // The test-only hasher keeps these tests quick; which algorithm
+            // production picks is covered by PasswordHasherTest.
+            PasswordHasher::forTests(),
             $this->sessions,
             new AuditLogRepository($this->pdo),
             new IpHasher('unit-test-ip-key'),

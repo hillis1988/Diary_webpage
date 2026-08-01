@@ -73,4 +73,36 @@ final class PasswordHasherTest extends TestCase
         self::assertTrue($hasher->verify(self::PASSWORD, $hash));
         self::assertFalse($hasher->needsRehash($hash));
     }
+
+    /**
+     * The test-only factory: cheap enough for property tests, still a salted
+     * one-way hash, and no influence at all on what production uses.
+     */
+    public function testTheTestOnlyHasherIsMinimumCostBcryptAndStillSalted(): void
+    {
+        $hasher = PasswordHasher::forTests();
+        $hash = $hasher->hash(self::PASSWORD);
+        $information = password_get_info($hash);
+
+        self::assertSame(PASSWORD_BCRYPT, $hasher->algorithm());
+        self::assertSame('bcrypt', $information['algoName']);
+        self::assertSame(PasswordHasher::TEST_BCRYPT_COST, (int) ($information['options']['cost'] ?? 0));
+        self::assertTrue($hasher->verify(self::PASSWORD, $hash));
+        self::assertFalse($hasher->verify(self::PASSWORD . 'x', $hash));
+        self::assertNotSame(
+            $hash,
+            $hasher->hash(self::PASSWORD),
+            'even at the minimum cost every hash carries its own salt'
+        );
+        self::assertFalse($hasher->needsRehash($hash), 'a test hash matches the test parameters');
+
+        // Production is untouched by the factory existing: the default hasher is
+        // still the preferred algorithm at its real work factors, and it would
+        // upgrade a hash made this cheaply at the next sign-in.
+        self::assertSame(PasswordHasher::preferredAlgorithm(), (new PasswordHasher())->algorithm());
+        self::assertTrue(
+            (new PasswordHasher())->needsRehash($hash),
+            'production must treat a minimum-cost hash as due for rehashing'
+        );
+    }
 }
