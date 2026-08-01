@@ -54,12 +54,26 @@ final class FeedbackView
             ? self::renderRecommendation($outcome)
             : self::renderUnavailable($outcome, $retryAction, $retryHiddenFields, $csrfFieldName, $csrfToken);
 
-        $safeDisclaimer = htmlspecialchars(self::DISCLAIMER_MESSAGE, ENT_QUOTES, 'UTF-8');
-
         return '        <div class="ai-feedback">' . "\n"
             . $body
-            . '            <p class="disclaimer">' . $safeDisclaimer . '</p>' . "\n"
+            . self::renderDisclaimer()
             . '        </div>' . "\n";
+    }
+
+    /**
+     * The disclaimer paragraph alone, with no surrounding outcome-specific
+     * body (Requirements 6.6, 9.6). Extracted so the summary page
+     * (task 14.6) can render the same fixed wording around its own
+     * {@see \Diary\Ai\SummaryOutcome}-shaped body, without forcing
+     * `SummaryOutcome` and `FeedbackOutcome` - different domains, CBT
+     * recommendation versus progress narrative plus metrics - to share a
+     * type just to share this one paragraph.
+     */
+    public static function renderDisclaimer(): string
+    {
+        $safeDisclaimer = htmlspecialchars(self::DISCLAIMER_MESSAGE, ENT_QUOTES, 'UTF-8');
+
+        return '            <p class="disclaimer">' . $safeDisclaimer . '</p>' . "\n";
     }
 
     private static function renderRecommendation(FeedbackOutcome $outcome): string

@@ -68,6 +68,22 @@ final class AccessControlService
     public const MILESTONES_PATH = '/milestones';
 
     /**
+     * Owner-only (Requirement 7.5): the viewer management page, listing viewers
+     * and offering the invite form and revoke control, and the link a Viewer
+     * follows to set their own password and accept an invitation. Unlike
+     * {@see MILESTONES_PATH} and the calendar/summary paths above, this page is
+     * never viewer-readable, so it is not one of the {@see navigationFor()}
+     * candidates.
+     */
+    public const VIEWERS_PATH = '/viewers';
+
+    /**
+     * Where an invitation link (task 15.4) points; there is no controller for it
+     * yet, only the constant every caller building or testing that link shares.
+     */
+    public const ACCEPT_INVITATION_PATH = '/accept-invitation';
+
+    /**
      * @param AuditLogRepository|null $auditLog when absent, denials are still
      *                                          refused, just not recorded; the
      *                                          decision never depends on logging

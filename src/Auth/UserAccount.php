@@ -32,6 +32,14 @@ final class UserAccount
         public readonly ?DateTimeImmutable $deletionRequestedAt,
         public readonly DateTimeImmutable $createdAt,
         public readonly DateTimeImmutable $updatedAt,
+        /**
+         * SHA-256 hash of the single-use invitation token an invited Viewer uses to
+         * set their own password (Requirement 7.1). Null once the invitation is
+         * accepted or for an account that was never invited.
+         */
+        public readonly ?string $invitationTokenHash = null,
+        /** When an outstanding invitation stops being acceptable. */
+        public readonly ?DateTimeImmutable $invitationExpiresAt = null,
     ) {
     }
 
@@ -59,6 +67,37 @@ final class UserAccount
             deletionRequestedAt: null,
             createdAt: $now,
             updatedAt: $now,
+        );
+    }
+
+    /**
+     * A Viewer invited by an owner (Requirement 7.1): Viewer_Role, linked to the
+     * owner's data, `status = 'invited'` and no password until the invitation is
+     * accepted, carrying the hash of the single-use token and its expiry.
+     */
+    public static function newInvitedViewer(
+        UserId $id,
+        EmailAddress $email,
+        UserId $ownerId,
+        string $invitationTokenHash,
+        DateTimeImmutable $invitationExpiresAt,
+        DateTimeImmutable $now,
+    ): self {
+        return new self(
+            id: $id,
+            emailNormalized: $email->normalized(),
+            emailDisplay: $email->display(),
+            passwordHash: null,
+            role: UserRole::Viewer,
+            dataOwnerId: $ownerId,
+            status: UserStatus::Invited,
+            failedLoginCount: 0,
+            lockedUntil: null,
+            deletionRequestedAt: null,
+            createdAt: $now,
+            updatedAt: $now,
+            invitationTokenHash: $invitationTokenHash,
+            invitationExpiresAt: $invitationExpiresAt,
         );
     }
 

@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace Diary\Tests\Unit\Http;
 
 use Diary\Access\AccessControlService;
+use Diary\Ai\AiConfig;
+use Diary\Ai\AiFeedbackService;
+use Diary\Ai\CbtRecommendation;
+use Diary\Ai\CbtRecommendationRepository;
+use Diary\Ai\ProviderError;
 use Diary\Auth\SecurityContext;
 use Diary\Auth\Session;
 use Diary\Auth\SessionId;
@@ -16,6 +21,7 @@ use Diary\Diary\DiaryService;
 use Diary\Diary\QuestionSet;
 use Diary\Http\CsrfGuard;
 use Diary\Http\DiaryEntryController;
+use Diary\Http\FeedbackView;
 use Diary\Http\Request;
 use Diary\Http\SessionResolverMiddleware;
 use Diary\Storage\ConnectionFactory;
@@ -24,6 +30,7 @@ use Diary\Storage\KeyRing;
 use Diary\Storage\PayloadCodec;
 use Diary\Support\FixedClock;
 use Diary\Support\Ulid;
+use Diary\Tests\Unit\Ai\FakeFeedbackProvider;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -40,6 +47,7 @@ final class DiaryEntryControllerTest extends TestCase
     private AccessControlService $access;
     private DiaryEntryController $controller;
     private CsrfGuard $csrf;
+    private FakeFeedbackProvider $feedbackProvider;
 
     protected function setUp(): void
     {
@@ -73,6 +81,22 @@ final class DiaryEntryControllerTest extends TestCase
             )'
         );
 
+        $this->pdo->exec(
+            'CREATE TABLE cbt_recommendations (
+                id                 CHAR(26)   NOT NULL PRIMARY KEY,
+                entry_id           CHAR(26)   NOT NULL,
+                status             TEXT       NOT NULL,
+                key_id             CHAR(26)   NULL,
+                nonce              BLOB       NULL,
+                payload_ciphertext BLOB       NULL,
+                provider           TEXT       NULL,
+                model              TEXT       NULL,
+                attempt_count      INTEGER    NOT NULL DEFAULT 0,
+                generated_at       DATETIME   NULL,
+                UNIQUE (entry_id)
+            )'
+        );
+
         $this->clock = FixedClock::at('2025-03-15 09:00:00');
 
         $keyRing = new KeyRing($this->pdo, str_repeat("\x2a", KeyRing::KEY_LENGTH), $this->clock);
@@ -83,12 +107,29 @@ final class DiaryEntryControllerTest extends TestCase
         $this->access = new AccessControlService($this->clock);
         $this->csrf = CsrfGuard::withMasterKey(str_repeat("\x2b", 32), $this->clock);
 
+        $this->feedbackProvider = new FakeFeedbackProvider();
+        $aiConfig = AiConfig::fromConfig(['ai' => [
+            'enabled' => true,
+            'provider' => 'example-provider',
+            'endpoint' => 'https://api.example.com/v1/chat/completions',
+            'api_key' => 'secret-key',
+            'model' => 'example-model',
+            'timeout_seconds' => 20,
+            'retries' => 1,
+        ]]);
+        $aiFeedbackService = new AiFeedbackService(
+            $this->feedbackProvider,
+            new CbtRecommendationRepository($this->pdo, $codec),
+            $aiConfig,
+        );
+
         $this->controller = new DiaryEntryController(
             $this->access,
             $diaryService,
             new DiaryInputValidator(),
             $this->csrf,
             $this->clock,
+            $aiFeedbackService,
         );
     }
 
@@ -206,8 +247,10 @@ final class DiaryEntryControllerTest extends TestCase
         self::assertStringContainsString('Calm thoughts', $html);
     }
 
-    public function testSubmitWithAValidEntrySavesItAndRedisplaysIt(): void
+    public function testSubmitWithAValidEntrySavesItAndRedisplaysItWithTheGeneratedRecommendation(): void
     {
+        $this->feedbackProvider->queue(new CbtRecommendation('You went for a walk.', 'Try a short walk tomorrow too.'));
+
         $context = $this->ownerContext();
         $token = $this->csrf->issueFor($this->getRequest($context));
 
@@ -228,10 +271,91 @@ final class DiaryEntryControllerTest extends TestCase
         self::assertStringContainsString(DiaryEntryController::SAVED_MESSAGE, $html);
         self::assertStringContainsString('2025-03-10', $html);
         self::assertStringContainsString('Went for a walk', $html);
-        // No AI feedback service exists yet (task 10): a pending notice stands in.
-        self::assertStringContainsString(DiaryEntryController::RECOMMENDATION_PENDING_MESSAGE, $html);
+        // The generated recommendation and the medical disclaimer (Requirements 6.5, 6.6).
+        self::assertStringContainsString('You went for a walk.', $html);
+        self::assertStringContainsString('Try a short walk tomorrow too.', $html);
+        self::assertStringContainsString(FeedbackView::DISCLAIMER_MESSAGE, $html);
+        // No retry control on a successful outcome.
+        self::assertStringNotContainsString(FeedbackView::RETRY_BUTTON_LABEL, $html);
 
         self::assertSame(1, (int) $this->pdo->query('SELECT COUNT(*) AS c FROM diary_entries')->fetch(PDO::FETCH_ASSOC)['c']);
+    }
+
+    public function testSubmitWithAProviderFailureRedisplaysTheEntryWithTheUnavailableNoticeAndARetryControl(): void
+    {
+        $this->feedbackProvider->queueFailure(new ProviderError('timed out'));
+
+        $context = $this->ownerContext();
+        $token = $this->csrf->issueFor($this->getRequest($context));
+
+        $request = $this->postRequest($context, [
+            CsrfGuard::FIELD_NAME => $token,
+            QuestionSet::DATE_FIELD => '2025-03-10',
+            QuestionSet::MOOD_RATING => '8',
+            QuestionSet::EVENTS => 'Went for a walk',
+        ]);
+
+        $response = $this->controller->submit($request);
+        $html = $response->body();
+
+        self::assertSame(200, $response->status());
+        self::assertStringContainsString(DiaryEntryController::SAVED_MESSAGE, $html);
+        self::assertStringContainsString('Feedback is temporarily unavailable', $html);
+        self::assertStringContainsString(FeedbackView::DISCLAIMER_MESSAGE, $html);
+        self::assertStringContainsString(DiaryEntryController::RETRY_FEEDBACK_PATH, $html);
+        self::assertStringContainsString(FeedbackView::RETRY_BUTTON_LABEL, $html);
+
+        self::assertSame(1, (int) $this->pdo->query('SELECT COUNT(*) AS c FROM diary_entries')->fetch(PDO::FETCH_ASSOC)['c']);
+    }
+
+    public function testRetryFeedbackReinvokesTheProviderAndRedisplaysTheSameEntry(): void
+    {
+        $this->feedbackProvider->queueFailure(new ProviderError('timed out'));
+
+        $context = $this->ownerContext();
+        $token = $this->csrf->issueFor($this->getRequest($context));
+
+        $submitRequest = $this->postRequest($context, [
+            CsrfGuard::FIELD_NAME => $token,
+            QuestionSet::DATE_FIELD => '2025-03-10',
+            QuestionSet::MOOD_RATING => '8',
+            QuestionSet::EVENTS => 'Went for a walk',
+        ]);
+        $this->controller->submit($submitRequest);
+
+        $this->feedbackProvider->queue(new CbtRecommendation('You went for a walk.', 'Try a short walk tomorrow too.'));
+
+        $retryRequest = Request::of('POST', DiaryEntryController::RETRY_FEEDBACK_PATH, form: [
+            CsrfGuard::FIELD_NAME => $this->csrf->issueFor($this->getRequest($context)),
+            DiaryEntryController::RETRY_DATE_FIELD => '2025-03-10',
+        ])->withAttribute(SessionResolverMiddleware::CONTEXT_ATTRIBUTE, $context);
+
+        $response = $this->controller->retryFeedback($retryRequest);
+        $html = $response->body();
+
+        self::assertSame(200, $response->status());
+        self::assertStringContainsString('You went for a walk.', $html);
+        self::assertStringContainsString('Try a short walk tomorrow too.', $html);
+        self::assertStringContainsString(FeedbackView::DISCLAIMER_MESSAGE, $html);
+        self::assertSame(2, $this->feedbackProvider->callCount());
+        // The retry never touches diary_entries.
+        self::assertSame(1, (int) $this->pdo->query('SELECT COUNT(*) AS c FROM diary_entries')->fetch(PDO::FETCH_ASSOC)['c']);
+        self::assertSame(1, (int) $this->pdo->query('SELECT COUNT(*) AS c FROM cbt_recommendations')->fetch(PDO::FETCH_ASSOC)['c']);
+    }
+
+    public function testRetryFeedbackInAViewerContextIsDenied(): void
+    {
+        $context = $this->viewerContext();
+
+        $retryRequest = Request::of('POST', DiaryEntryController::RETRY_FEEDBACK_PATH, form: [
+            CsrfGuard::FIELD_NAME => $this->csrf->issueFor($this->getRequest($context)),
+            DiaryEntryController::RETRY_DATE_FIELD => '2025-03-10',
+        ])->withAttribute(SessionResolverMiddleware::CONTEXT_ATTRIBUTE, $context);
+
+        $response = $this->controller->retryFeedback($retryRequest);
+
+        self::assertSame(403, $response->status());
+        self::assertStringContainsString('read-only access', $response->body());
     }
 
     public function testSecondSubmissionForTheSameDateUpdatesRatherThanDuplicates(): void

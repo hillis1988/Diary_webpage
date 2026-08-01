@@ -32,4 +32,10 @@ enum AuditAction: string
      * of its content.
      */
     case OperationDenied = 'operation_denied';
+
+    /** An owner created a Viewer account (Requirement 7.1). */
+    case ViewerCreated = 'viewer_created';
+
+    /** An owner revoked a Viewer's access (Requirement 7.4). */
+    case ViewerRevoked = 'viewer_revoked';
 }

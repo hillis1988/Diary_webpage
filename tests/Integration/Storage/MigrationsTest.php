@@ -119,7 +119,7 @@ final class MigrationsTest extends TestCase
         $migrations = MigrationLoader::fromDirectory($this->migrationsDirectory());
         $report = $this->runner()->migrate($migrations);
 
-        self::assertSame([1, 2, 3, 4, 5, 6, 7, 8], $report->appliedVersions());
+        self::assertSame([1, 2, 3, 4, 5, 6, 7, 8, 9], $report->appliedVersions());
         self::assertSame([], $report->alreadyAppliedVersions());
         self::assertSame([], $report->recordedButMissing());
         self::assertFalse($report->wasNoOp());

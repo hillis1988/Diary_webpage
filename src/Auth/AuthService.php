@@ -85,6 +85,16 @@ final class AuthService
     /** Requirement 2.5: half an hour without a request ends the session. */
     public const IDLE_TIMEOUT_MINUTES = 30;
 
+    public const INVITATION_INVALID_ERROR_CODE = 'invitation_invalid';
+
+    /**
+     * Requirement 7.1. One message for a token that does not match any invited
+     * account, one that has already been used, and one that has expired: the
+     * wording deliberately does not distinguish them, so a stale link cannot be
+     * used to probe which case applies.
+     */
+    public const INVITATION_INVALID_MESSAGE = 'This invitation link is no longer valid';
+
     public const SESSION_ENDED_ERROR_CODE = 'session_ended';
 
     /**
@@ -174,6 +184,59 @@ final class AuthService
         }
 
         return Result::ok($id);
+    }
+
+    /**
+     * An invited Viewer sets their own password, moving `status` from `invited`
+     * to `active` (Requirement 7.1).
+     *
+     * Ordered like {@see register()}: the token is looked up and checked for
+     * expiry before the password is validated, and the password is validated
+     * against the same {@see PasswordPolicy} before anything is written, so a
+     * rejected attempt leaves the invitation exactly as it was - still usable
+     * with a valid password.
+     *
+     * The token is a shared secret rather than an account identifier, so a
+     * mismatched, already-used or expired one all produce the same
+     * {@see INVITATION_INVALID_MESSAGE}: telling them apart would let a caller
+     * learn something about an invitation they do not hold.
+     *
+     * @param string $token the raw invitation token, as it appears in the link
+     *                       {@see \Diary\Access\ViewerAccessService::createViewer()}
+     *                       returned
+     *
+     * @return Result<null>
+     */
+    public function acceptViewerInvitation(string $token, string $password, DateTimeImmutable $now): Result
+    {
+        $parsed = InvitationToken::tryFromString($token);
+
+        if ($parsed === null) {
+            return self::invitationInvalid();
+        }
+
+        $account = $this->users->findByInvitationTokenHash($parsed->hash());
+
+        if ($account === null || $account->invitationExpiresAt === null || $account->invitationExpiresAt <= $now) {
+            return self::invitationInvalid();
+        }
+
+        $policy = $this->passwordPolicy->validate($password);
+
+        if ($policy->isFailure()) {
+            return $policy;
+        }
+
+        $accepted = $this->users->acceptInvitation($account->id, $this->passwordHasher->hash($password), $now);
+
+        if (!$accepted) {
+            // Lost a race with another acceptance of the same token; the token is
+            // single-use, so the loser is told the ordinary invalid-invitation
+            // message rather than succeeding a second time.
+            return self::invitationInvalid();
+        }
+
+        return Result::ok(null);
     }
 
     /**
@@ -464,6 +527,17 @@ final class AuthService
             self::EMAIL_TAKEN_ERROR_CODE,
             self::EMAIL_TAKEN_MESSAGE,
             [self::EMAIL_FIELD => self::EMAIL_TAKEN_MESSAGE],
+        );
+    }
+
+    /**
+     * @return Result<null>
+     */
+    private static function invitationInvalid(): Result
+    {
+        return Result::failure(
+            self::INVITATION_INVALID_ERROR_CODE,
+            self::INVITATION_INVALID_MESSAGE,
         );
     }
 }

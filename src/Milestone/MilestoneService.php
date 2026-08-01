@@ -98,6 +98,17 @@ final class MilestoneService
     }
 
     /**
+     * A thin passthrough to {@see MilestoneRepository::findById()}, mirroring
+     * {@see \Diary\Diary\DiaryService::entryForDate()}. Exists so the
+     * milestone edit form re-fetches a single milestone through
+     * Milestone_Service rather than reaching past it for the repository.
+     */
+    public function find(OwnerId $owner, MilestoneId $id): ?Milestone
+    {
+        return $this->repository->findById($owner, $id);
+    }
+
+    /**
      * @return Result<null>
      */
     private static function notFound(): Result

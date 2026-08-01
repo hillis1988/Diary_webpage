@@ -176,7 +176,7 @@ Registration and authentication already have property tests in place (Properties
     - Render the question set as an accessible form, restrict create and modify to an owner context, redisplay the entry with its recommendation after submission
     - _Requirements: 5.1, 5.3, 5.6, 8.2_
 
-- [ ] 10. AI CBT feedback on entry
+- [x] 10. AI CBT feedback on entry
   - [x] 10.1 Implement the FeedbackProvider adapter and prompt builder
     - Provider-agnostic HTTPS adapter requesting strict JSON, 20-second timeout, one retry, throwing `ProviderError` on failure
     - Prompts are pseudonymised: entry content and derived metrics only, never account identifiers, email addresses or names
@@ -200,14 +200,14 @@ Registration and authentication already have property tests in place (Properties
     - Assert a provider timeout or error still commits the diary entry, records `status = 'failed'`, and the retry control re-invokes the provider without duplicating the entry
     - **Validates: Requirements 6.5**
 
-  - [-] 10.6 Implement the shared medical disclaimer partial and feedback rendering
+  - [x] 10.6 Implement the shared medical disclaimer partial and feedback rendering
     - Single view partial used by every AI surface; render the recommendation, or the "feedback is temporarily unavailable" notice plus retry control on failure
     - _Requirements: 6.5, 6.6_
 
-- [~] 11. Checkpoint - diary and feedback loop
+- [-] 11. Checkpoint - diary and feedback loop
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Significant milestones
+- [x] 12. Significant milestones
   - [x] 12.1 Implement Milestone_Service and repository
     - Owner-scoped encrypted create, update, delete and `inRange`; category restricted to the closed set `medication`, `relationship`, `lifestyle`, `other`
     - Reject a blank or missing description, a missing date, or a category outside the set, naming each offending field and writing nothing
@@ -222,59 +222,59 @@ Registration and authentication already have property tests in place (Properties
     - Cover a blank description, a missing description, a missing date and a category outside the closed set; assert each is rejected, names the offending field, and writes nothing
     - **Validates: Requirements 10.4**
 
-  - [-] 12.4 Implement milestone pages and controller
+  - [x] 12.4 Implement milestone pages and controller
     - List, create, edit and delete views with the category selector; controls hidden and requests denied in a viewer context
     - _Requirements: 10.1, 10.2, 10.3, 10.5_
 
-- [ ] 13. Calendar view of history
-  - [~] 13.1 Implement calendarMonth and the Calendar_View
+- [x] 13. Calendar view of history
+  - [x] 13.1 Implement calendarMonth and the Calendar_View
     - Build `CalendarMonth` from the session's data owner's entry dates and milestone dates for the month; render a date-based layout with entry indicators and milestone indicators
     - Selecting a date with an entry shows that entry and its recommendation; selecting a date without one shows the no-entry message
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [~] 13.2 Write unit tests for calendar indicators
+  - [x] 13.2 Write unit tests for calendar indicators
     - Cover a month with entries, milestones, both, and neither; a date with no entry shows the no-entry message; assert indicators only ever come from the resolved data owner
     - **Validates: Requirements 8.1, 8.3, 8.4, 8.5**
 
-- [ ] 14. AI progress summary
-  - [~] 14.1 Implement TrendCalculator
+- [x] 14. AI progress summary
+  - [x] 14.1 Implement TrendCalculator
     - Deterministic count, mean, minimum, maximum for mood and sleep series, tolerating missing sleep values; direction from a least-squares slope mapped to improving, declining or stable
     - _Requirements: 9.2_
 
-  - [~] 14.2 Write property test for trend metrics
+  - [x] 14.2 Write property test for trend metrics
     - **Property 5: Trend metrics equal a reference computation**
     - **Validates: Requirements 9.2**
 
-  - [~] 14.3 Implement SummaryProvider adapter and AI_Summary_Service
+  - [x] 14.3 Implement SummaryProvider adapter and AI_Summary_Service
     - Gather exactly the data owner's entries and milestones whose dates fall within the inclusive selected range; hand computed metrics to the provider as facts to narrate
     - Check the entry count first: fewer than three yields `InsufficientData` before calling the provider; with three or more a provider failure yields `Unavailable`; otherwise return the summary with metrics
     - Relate trends to in-range milestones in the summary input
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 
-  - [~] 14.4 Write unit tests for summary input scoping
+  - [x] 14.4 Write unit tests for summary input scoping
     - Assert entries and milestones outside the selected range, or belonging to another owner, are never included in what is handed to the provider
     - **Validates: Requirements 9.1, 9.3**
 
-  - [~] 14.5 Write unit tests for summary outcome precedence
+  - [x] 14.5 Write unit tests for summary outcome precedence
     - Cover fewer than 3 entries with a working provider, fewer than 3 entries with a failing provider, and 3+ entries with a failing provider; assert insufficient-data always wins when it applies
     - **Validates: Requirements 9.4, 9.5**
 
-  - [~] 14.6 Implement the summary page with date range selection
+  - [x] 14.6 Implement the summary page with date range selection
     - Range picker, rendered trend metrics for mood and sleep, narrative or the more-entries-needed / temporarily-unavailable message, disclaimer partial rendered whenever the service is invoked
     - _Requirements: 9.1, 9.2, 9.4, 9.5, 9.6_
 
-  - [~] 14.7 Write unit tests for the medical disclaimer
+  - [x] 14.7 Write unit tests for the medical disclaimer
     - Assert the shared disclaimer partial renders on the entry feedback view and the summary page, in every outcome branch of each
     - **Validates: Requirements 6.6, 9.6**
 
 - [ ] 15. Read-only viewer accounts
-  - [~] 15.1 Implement viewer creation and revocation
+  - [x] 15.1 Implement viewer creation and revocation
     - `createViewer` from an owner context creates a `viewer` account with `data_owner_id` set to the Primary_User and `status = 'invited'`, issuing a single-use invitation token; the viewer sets a password satisfying the same policy, moving them to `active`
     - `revokeViewer` sets `status = 'revoked'` and terminates that viewer's live sessions immediately, blocking further reads and re-authentication
     - Restrict both operations to an owner context and record them in `audit_log`
     - _Requirements: 7.1, 7.4, 7.5_
 
-  - [~] 15.2 Write unit tests for granting and revoking viewer access
+  - [x] 15.2 Write unit tests for granting and revoking viewer access
     - Cover invite -> set password -> active, and active -> revoke -> blocked from further reads and re-authentication; assert each step is recorded in `audit_log`
     - **Validates: Requirements 7.1, 7.4**
 
@@ -282,12 +282,12 @@ Registration and authentication already have property tests in place (Properties
     - **Property 2: Reads are scoped to the session's data owner**
     - **Validates: Requirements 4.4, 7.2, 8.5**
 
-  - [~] 15.4 Implement viewer management page
+  - [-] 15.4 Implement viewer management page
     - Owner-only page listing viewers with their status, invite form and revoke control
     - _Requirements: 7.1, 7.4, 7.5_
 
 - [ ] 16. Account deletion and cron endpoints
-  - [~] 16.1 Implement PurgeService
+  - [x] 16.1 Implement PurgeService
     - `requestDeletion` sets `deletion_requested_at`, records a `purge_jobs` row, and purges immediately in one transaction: recommendations, entries, milestones, linked viewer accounts, sessions, then the user row
     - Strip audit rows of references to deleted content; leave the `purge_jobs` row on failure; `runPurgeSlice` retries outstanding jobs idempotently within a bounded limit
     - _Requirements: 4.5_

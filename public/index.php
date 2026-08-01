@@ -3,26 +3,40 @@
 declare(strict_types=1);
 
 use Diary\Access\AccessControlService;
+use Diary\Ai\AiConfig;
+use Diary\Ai\AiFeedbackService;
+use Diary\Ai\AiSummaryService;
+use Diary\Ai\CbtRecommendationRepository;
+use Diary\Ai\CurlHttpTransport;
+use Diary\Ai\HttpsFeedbackProvider;
+use Diary\Ai\HttpsSummaryProvider;
 use Diary\Auth\AuditLogRepository;
 use Diary\Auth\AuthService;
 use Diary\Auth\DefaultPasswordPolicy;
 use Diary\Auth\IpHasher;
 use Diary\Auth\SessionRepository;
 use Diary\Auth\UserRepository;
+use Diary\Diary\CalendarService;
 use Diary\Diary\DiaryEntryRepository;
 use Diary\Diary\DiaryInputValidator;
 use Diary\Diary\DiaryService;
 use Diary\Http\AuthorisationMiddleware;
+use Diary\Http\CalendarController;
 use Diary\Http\CsrfGuard;
 use Diary\Http\CsrfMiddleware;
 use Diary\Http\DiaryEntryController;
 use Diary\Http\HomePageController;
 use Diary\Http\HttpsRedirectMiddleware;
+use Diary\Http\MilestoneController;
 use Diary\Http\Pipeline;
 use Diary\Http\Request;
 use Diary\Http\Router;
 use Diary\Http\SecurityHeadersMiddleware;
 use Diary\Http\SessionResolverMiddleware;
+use Diary\Http\SummaryController;
+use Diary\Milestone\MilestoneInputValidator;
+use Diary\Milestone\MilestoneRepository;
+use Diary\Milestone\MilestoneService;
 use Diary\Storage\ConnectionFactory;
 use Diary\Storage\Crypto;
 use Diary\Storage\KeyRing;
@@ -143,8 +157,16 @@ $request = Request::fromGlobals($_SERVER, $_GET, $_POST, $_COOKIE, $trustForward
 $csrfGuard = CsrfGuard::withMasterKey($masterKey, $clock);
 
 $keyRing = new KeyRing($pdo, $masterKey, $clock);
-$diaryEntryRepository = new DiaryEntryRepository($pdo, new PayloadCodec(new Crypto($keyRing)));
+$payloadCodec = new PayloadCodec(new Crypto($keyRing));
+$diaryEntryRepository = new DiaryEntryRepository($pdo, $payloadCodec);
 $diaryService = new DiaryService($diaryEntryRepository);
+
+$aiConfig = AiConfig::fromConfig($config);
+$aiFeedbackService = new AiFeedbackService(
+    new HttpsFeedbackProvider(new CurlHttpTransport(), $aiConfig),
+    new CbtRecommendationRepository($pdo, $payloadCodec),
+    $aiConfig,
+);
 
 $router = new Router();
 
@@ -158,9 +180,46 @@ $diaryEntryPage = new DiaryEntryController(
     new DiaryInputValidator(),
     $csrfGuard,
     $clock,
+    $aiFeedbackService,
 );
 $router->get(AccessControlService::DIARY_ENTRY_PATH, static fn (Request $r, array $params) => $diaryEntryPage->show($r));
 $router->post(AccessControlService::DIARY_ENTRY_PATH, static fn (Request $r, array $params) => $diaryEntryPage->submit($r));
+$router->post(DiaryEntryController::RETRY_FEEDBACK_PATH, static fn (Request $r, array $params) => $diaryEntryPage->retryFeedback($r));
+
+$milestoneRepository = new MilestoneRepository($pdo, $payloadCodec);
+$milestoneService = new MilestoneService($milestoneRepository);
+$milestonePages = new MilestoneController(
+    $accessControl,
+    $milestoneService,
+    new MilestoneInputValidator(),
+    $csrfGuard,
+    $clock,
+);
+$router->get(AccessControlService::MILESTONES_PATH, static fn (Request $r, array $params) => $milestonePages->list($r));
+$router->get(MilestoneController::NEW_PATH, static fn (Request $r, array $params) => $milestonePages->showCreateForm($r));
+$router->post(MilestoneController::NEW_PATH, static fn (Request $r, array $params) => $milestonePages->submitCreate($r));
+$router->get(AccessControlService::MILESTONES_PATH . '/{id}/edit', static fn (Request $r, array $params) => $milestonePages->showEditForm($r, $params));
+$router->post(AccessControlService::MILESTONES_PATH . '/{id}/edit', static fn (Request $r, array $params) => $milestonePages->submitEdit($r, $params));
+$router->post(AccessControlService::MILESTONES_PATH . '/{id}/delete', static fn (Request $r, array $params) => $milestonePages->delete($r, $params));
+
+$cbtRecommendationRepository = new CbtRecommendationRepository($pdo, $payloadCodec);
+$calendarService = new CalendarService($diaryEntryRepository, $milestoneRepository);
+$calendarPage = new CalendarController(
+    $accessControl,
+    $calendarService,
+    $diaryService,
+    $cbtRecommendationRepository,
+    $clock,
+);
+$router->get(AccessControlService::CALENDAR_PATH, static fn (Request $r, array $params) => $calendarPage->show($r));
+
+$aiSummaryService = new AiSummaryService(
+    $diaryService,
+    $milestoneService,
+    new HttpsSummaryProvider(new CurlHttpTransport(), $aiConfig),
+);
+$summaryPage = new SummaryController($accessControl, $aiSummaryService, $clock);
+$router->get(AccessControlService::SUMMARY_PATH, static fn (Request $r, array $params) => $summaryPage->show($r));
 
 $pipeline = Pipeline::fixedOrder(
     new HttpsRedirectMiddleware($baseUrl, $forceHttps),

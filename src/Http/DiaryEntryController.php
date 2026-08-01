@@ -261,16 +261,30 @@ final class DiaryEntryController
         return Operation::of(OperationKind::WriteDiaryEntry, 'diary_entry.submit', $request->pathWithQuery());
     }
 
-    private static function renderConfirmation(DiaryEntry $entry): string
+    private static function retryOperation(Request $request): Operation
+    {
+        return Operation::of(OperationKind::WriteDiaryEntry, 'diary_entry.retry_feedback', $request->pathWithQuery());
+    }
+
+    private static function renderConfirmation(DiaryEntry $entry, ?FeedbackOutcome $feedbackOutcome, string $csrfToken): string
     {
         $safeMessage = htmlspecialchars(self::SAVED_MESSAGE, ENT_QUOTES, 'UTF-8');
         $safeDate = htmlspecialchars($entry->date()->toIso(), ENT_QUOTES, 'UTF-8');
-        $safePending = htmlspecialchars(self::RECOMMENDATION_PENDING_MESSAGE, ENT_QUOTES, 'UTF-8');
+
+        $feedback = $feedbackOutcome !== null
+            ? FeedbackView::render(
+                $feedbackOutcome,
+                self::RETRY_FEEDBACK_PATH,
+                [self::RETRY_DATE_FIELD => $entry->date()->toIso()],
+                CsrfGuard::FIELD_NAME,
+                $csrfToken,
+            )
+            : '';
 
         return '        <div role="status">' . "\n"
             . '            <p>' . $safeMessage . ' (' . $safeDate . ')</p>' . "\n"
-            . '            <p>' . $safePending . '</p>' . "\n"
-            . '        </div>' . "\n";
+            . '        </div>' . "\n"
+            . $feedback;
     }
 
     /**

@@ -33,7 +33,8 @@ final class UserRepository
     public const DATETIME_FORMAT = 'Y-m-d H:i:s';
 
     private const COLUMNS = 'id, email_normalized, email_display, password_hash, role, data_owner_id, '
-        . 'status, failed_login_count, locked_until, deletion_requested_at, created_at, updated_at';
+        . 'status, failed_login_count, locked_until, deletion_requested_at, created_at, updated_at, '
+        . 'invitation_token_hash, invitation_expires_at';
 
     public function __construct(private readonly PDO $pdo)
     {
@@ -69,6 +70,47 @@ final class UserRepository
     }
 
     /**
+     * The account whose live invitation matches this token's hash, or null when
+     * there is none - either because no account carries that hash or because the
+     * invitation is not `status = 'invited'` (Requirement 7.1). Expiry is not
+     * checked here: {@see AuthService::acceptViewerInvitation()} decides that so
+     * an expired invitation gets its own message rather than "not found".
+     */
+    public function findByInvitationTokenHash(string $invitationTokenHash): ?UserAccount
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT ' . self::COLUMNS . ' FROM users '
+            . 'WHERE invitation_token_hash = :hash AND status = :status LIMIT 1'
+        );
+        $statement->execute([':hash' => $invitationTokenHash, ':status' => UserStatus::Invited->value]);
+
+        return $this->hydrateOne($statement);
+    }
+
+    /**
+     * Every viewer account linked to one owner (Requirement 7.5's viewer
+     * management page reads this), ordered by creation.
+     *
+     * @return list<UserAccount>
+     */
+    public function findViewersByOwner(UserId|string $ownerId): array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT ' . self::COLUMNS . ' FROM users '
+            . 'WHERE role = :role AND data_owner_id = :owner_id ORDER BY created_at, id'
+        );
+        $statement->execute([':role' => UserRole::Viewer->value, ':owner_id' => (string) $ownerId]);
+
+        $accounts = [];
+        /** @var array<string, mixed> $row */
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $accounts[] = self::hydrate($row);
+        }
+
+        return $accounts;
+    }
+
+    /**
      * Whether an address already has an account. Used before registration writes
      * anything, so the ordinary duplicate case never reaches the unique index.
      */
@@ -95,7 +137,8 @@ final class UserRepository
         $statement = $this->pdo->prepare(
             'INSERT INTO users (' . self::COLUMNS . ') VALUES '
             . '(:id, :email_normalized, :email_display, :password_hash, :role, :data_owner_id, '
-            . ':status, :failed_login_count, :locked_until, :deletion_requested_at, :created_at, :updated_at)'
+            . ':status, :failed_login_count, :locked_until, :deletion_requested_at, :created_at, :updated_at, '
+            . ':invitation_token_hash, :invitation_expires_at)'
         );
 
         try {
@@ -112,6 +155,8 @@ final class UserRepository
                 ':deletion_requested_at' => self::formatDateTime($account->deletionRequestedAt),
                 ':created_at' => self::formatDateTime($account->createdAt),
                 ':updated_at' => self::formatDateTime($account->updatedAt),
+                ':invitation_token_hash' => $account->invitationTokenHash,
+                ':invitation_expires_at' => self::formatDateTime($account->invitationExpiresAt),
             ]);
         } catch (PDOException $exception) {
             if (self::isDuplicateEmail($exception)) {
@@ -120,6 +165,60 @@ final class UserRepository
 
             throw $exception;
         }
+    }
+
+    /**
+     * An invited Viewer accepts their invitation (Requirement 7.1): the password
+     * hash is set, status moves to active, and the invitation token and expiry
+     * are cleared so the same token cannot be used a second time.
+     *
+     * Scoped to `status = 'invited'` in the WHERE clause, so calling this twice -
+     * a race on the same token - only ever succeeds once.
+     *
+     * @return bool whether this call was the one that accepted the invitation
+     */
+    public function acceptInvitation(UserId $id, string $passwordHash, DateTimeImmutable $now): bool
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE users SET password_hash = :password_hash, status = :status, '
+            . 'invitation_token_hash = NULL, invitation_expires_at = NULL, updated_at = :updated_at '
+            . 'WHERE id = :id AND status = :invited_status'
+        );
+
+        $statement->execute([
+            ':password_hash' => $passwordHash,
+            ':status' => UserStatus::Active->value,
+            ':updated_at' => self::formatDateTime($now),
+            ':id' => $id->toString(),
+            ':invited_status' => UserStatus::Invited->value,
+        ]);
+
+        return $statement->rowCount() > 0;
+    }
+
+    /**
+     * Revoke a viewer's access (Requirement 7.4): sets `status = 'revoked'`,
+     * scoped to a viewer account actually linked to this owner so an owner cannot
+     * revoke an account they do not own.
+     *
+     * @return bool whether a matching, not-already-revoked viewer was found
+     */
+    public function revokeViewer(UserId $viewerId, UserId $ownerId, DateTimeImmutable $now): bool
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE users SET status = :revoked, updated_at = :updated_at '
+            . 'WHERE id = :id AND data_owner_id = :owner_id AND role = :role AND status != :revoked'
+        );
+
+        $statement->execute([
+            ':revoked' => UserStatus::Revoked->value,
+            ':updated_at' => self::formatDateTime($now),
+            ':id' => $viewerId->toString(),
+            ':owner_id' => $ownerId->toString(),
+            ':role' => UserRole::Viewer->value,
+        ]);
+
+        return $statement->rowCount() > 0;
     }
 
     /**
@@ -186,6 +285,7 @@ final class UserRepository
     public static function hydrate(array $row): UserAccount
     {
         $passwordHash = $row['password_hash'];
+        $invitationTokenHash = $row['invitation_token_hash'] ?? null;
 
         return new UserAccount(
             id: UserId::fromString((string) $row['id']),
@@ -200,6 +300,10 @@ final class UserRepository
             deletionRequestedAt: self::parseDateTime($row['deletion_requested_at']),
             createdAt: self::parseDateTime($row['created_at']) ?? new DateTimeImmutable('@0'),
             updatedAt: self::parseDateTime($row['updated_at']) ?? new DateTimeImmutable('@0'),
+            invitationTokenHash: $invitationTokenHash === null || $invitationTokenHash === ''
+                ? null
+                : (string) $invitationTokenHash,
+            invitationExpiresAt: self::parseDateTime($row['invitation_expires_at'] ?? null),
         );
     }
 

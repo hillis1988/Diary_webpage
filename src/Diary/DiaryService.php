@@ -6,6 +6,7 @@ namespace Diary\Diary;
 
 use Diary\Access\OwnerId;
 use Diary\Support\Clock;
+use Diary\Support\DateRange;
 use Diary\Support\LocalDate;
 use Diary\Support\Result;
 
@@ -65,5 +66,20 @@ final class DiaryService
     public function entryForDate(OwnerId $owner, LocalDate $date): ?DiaryEntry
     {
         return $this->repository->findByDate($owner, $date);
+    }
+
+    /**
+     * Every Diary_Entry belonging to the owner whose date falls within the
+     * given range, inclusive (Requirement 9.1). A thin passthrough to
+     * {@see DiaryEntryRepository::findInRange()}, mirroring design.md's
+     * `entriesInRange` interface method, so AI_Summary_Service (task 14.3)
+     * goes through Diary_Service rather than reaching past it for the
+     * repository.
+     *
+     * @return list<DiaryEntry> ordered by date, ascending
+     */
+    public function entriesInRange(OwnerId $owner, DateRange $range): array
+    {
+        return $this->repository->findInRange($owner, $range);
     }
 }

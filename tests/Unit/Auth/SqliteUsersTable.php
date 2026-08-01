@@ -36,23 +36,28 @@ final class SqliteUsersTable
     {
         $pdo->exec(
             'CREATE TABLE users (
-                id                    TEXT    NOT NULL PRIMARY KEY,
-                email_normalized      TEXT    NOT NULL COLLATE BINARY,
-                email_display         TEXT    NOT NULL,
-                password_hash         TEXT        NULL,
-                role                  TEXT    NOT NULL CHECK (role IN (\'owner\', \'viewer\')),
-                data_owner_id         TEXT    NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-                status                TEXT    NOT NULL DEFAULT \'invited\'
-                                              CHECK (status IN (\'invited\', \'active\', \'revoked\')),
-                failed_login_count    INTEGER NOT NULL DEFAULT 0,
-                locked_until          TEXT        NULL,
-                deletion_requested_at TEXT        NULL,
-                created_at            TEXT    NOT NULL,
-                updated_at            TEXT    NOT NULL
+                id                     TEXT    NOT NULL PRIMARY KEY,
+                email_normalized       TEXT    NOT NULL COLLATE BINARY,
+                email_display          TEXT    NOT NULL,
+                password_hash          TEXT        NULL,
+                role                   TEXT    NOT NULL CHECK (role IN (\'owner\', \'viewer\')),
+                data_owner_id          TEXT    NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+                status                 TEXT    NOT NULL DEFAULT \'invited\'
+                                               CHECK (status IN (\'invited\', \'active\', \'revoked\')),
+                failed_login_count     INTEGER NOT NULL DEFAULT 0,
+                locked_until           TEXT        NULL,
+                deletion_requested_at  TEXT        NULL,
+                created_at             TEXT    NOT NULL,
+                updated_at             TEXT    NOT NULL,
+                invitation_token_hash  TEXT        NULL,
+                invitation_expires_at  TEXT        NULL
             )'
         );
 
         $pdo->exec('CREATE UNIQUE INDEX uq_users_email_normalized ON users (email_normalized)');
+        $pdo->exec(
+            'CREATE UNIQUE INDEX uq_users_invitation_token_hash ON users (invitation_token_hash)'
+        );
     }
 
     /**
