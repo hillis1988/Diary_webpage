@@ -1,0 +1,91 @@
+/*
+ * Base stylesheet. Plain CSS, no build step: the deployable artefact is just files.
+ * Accessibility baseline: system font stack, high-contrast text, visible focus, and a
+ * layout that reflows without horizontal scrolling down to 320px.
+ */
+
+:root {
+    --colour-bg: #fbfaf8;
+    --colour-surface: #ffffff;
+    --colour-text: #1d1d1f;
+    --colour-muted: #55555c;
+    --colour-accent: #2a5d8f;
+    --colour-border: #d6d3cd;
+    --colour-error: #8a1c1c;
+    --radius: 6px;
+    --space: 1rem;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: var(--space);
+    background: var(--colour-bg);
+    color: var(--colour-text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+main {
+    max-width: 60rem;
+    margin: 0 auto;
+}
+
+h1 {
+    font-size: 1.75rem;
+    margin: 0 0 var(--space);
+}
+
+a {
+    color: var(--colour-accent);
+}
+
+:focus-visible {
+    outline: 3px solid var(--colour-accent);
+    outline-offset: 2px;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.notice {
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius);
+    background: var(--colour-surface);
+    padding: var(--space);
+}
+
+.notice--error {
+    border-color: var(--colour-error);
+    color: var(--colour-error);
+}
+
+.muted {
+    color: var(--colour-muted);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --colour-bg: #16161a;
+        --colour-surface: #1f1f24;
+        --colour-text: #f2f2f4;
+        --colour-muted: #b6b6bd;
+        --colour-accent: #8ab4e8;
+        --colour-border: #3a3a42;
+        --colour-error: #f08a8a;
+    }
+}
