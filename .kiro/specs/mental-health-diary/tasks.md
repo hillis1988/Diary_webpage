@@ -153,7 +153,7 @@ Registration and authentication already have property tests in place (Properties
     - Assert TLS redirect precedes headers, headers precede session resolution, session resolution precedes authorisation, authorisation precedes the handler; assert no application body is emitted over plaintext HTTP
     - _Requirements: 2.6, 4.3_
 
-- [ ] 9. Structured diary entry capture
+- [x] 9. Structured diary entry capture
   - [x] 9.1 Define the question set and diary input validation
     - Define the structured question set as data: mood rating (1-10, required), sleep quality (1-5 ordinal, optional), notable events, thoughts, emotions; the form, validation and AI prompt all read this definition
     - Validate the whole input before any write; reject a missing or out-of-range mood rating with the message naming the mood rating field and preserve submitted answers for redisplay
@@ -168,39 +168,39 @@ Registration and authentication already have property tests in place (Properties
     - Implement `findByDate`, `findInRange`, `datesWithEntries`, each taking an `OwnerId` resolved by Access_Control_Service and binding it as a SQL parameter
     - _Requirements: 5.3, 5.4, 4.4_
 
-  - [-] 9.4 Write property test for one entry per date
+  - [x] 9.4 Write property test for one entry per date
     - **Property 4: Exactly one entry per date, holding the last accepted submission**
     - **Validates: Requirements 5.3, 5.4, 6.4, 8.2**
 
-  - [-] 9.5 Implement the diary entry page and controller
+  - [x] 9.5 Implement the diary entry page and controller
     - Render the question set as an accessible form, restrict create and modify to an owner context, redisplay the entry with its recommendation after submission
     - _Requirements: 5.1, 5.3, 5.6, 8.2_
 
 - [ ] 10. AI CBT feedback on entry
-  - [-] 10.1 Implement the FeedbackProvider adapter and prompt builder
+  - [x] 10.1 Implement the FeedbackProvider adapter and prompt builder
     - Provider-agnostic HTTPS adapter requesting strict JSON, 20-second timeout, one retry, throwing `ProviderError` on failure
     - Prompts are pseudonymised: entry content and derived metrics only, never account identifiers, email addresses or names
     - Honour the configuration switch that disables AI entirely
     - _Requirements: 6.1_
 
-  - [~] 10.2 Implement AI_Feedback_Service with shape validation and retry
+  - [x] 10.2 Implement AI_Feedback_Service with shape validation and retry
     - Run after the entry is committed and outside its transaction; accept a response only when it carries exactly one non-empty positive focus and one non-empty suggested change, otherwise record `status = 'failed'` and return `Unavailable`
     - Store the accepted recommendation encrypted and linked to the entry with `provider`, `model`, `attempt_count`, `generated_at`; expose a retry control that re-invokes the provider
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-  - [~] 10.3 Write unit tests for feedback input scoping
+  - [x] 10.3 Write unit tests for feedback input scoping
     - Assert the prompt sent to the provider contains only the entry's own content and derived metrics, and a snapshot test proves no account identifier, email address or name is ever included
     - **Validates: Requirements 6.1**
 
-  - [~] 10.4 Write unit tests for recommendation shape validation
+  - [x] 10.4 Write unit tests for recommendation shape validation
     - Cover an empty positive focus, an empty suggested change, extra fields, and malformed JSON; each is treated as a failure rather than partially stored
     - **Validates: Requirements 6.2, 6.3**
 
-  - [~] 10.5 Write unit tests for feedback failure isolation
+  - [x] 10.5 Write unit tests for feedback failure isolation
     - Assert a provider timeout or error still commits the diary entry, records `status = 'failed'`, and the retry control re-invokes the provider without duplicating the entry
     - **Validates: Requirements 6.5**
 
-  - [~] 10.6 Implement the shared medical disclaimer partial and feedback rendering
+  - [-] 10.6 Implement the shared medical disclaimer partial and feedback rendering
     - Single view partial used by every AI surface; render the recommendation, or the "feedback is temporarily unavailable" notice plus retry control on failure
     - _Requirements: 6.5, 6.6_
 
@@ -208,21 +208,21 @@ Registration and authentication already have property tests in place (Properties
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 12. Significant milestones
-  - [~] 12.1 Implement Milestone_Service and repository
+  - [x] 12.1 Implement Milestone_Service and repository
     - Owner-scoped encrypted create, update, delete and `inRange`; category restricted to the closed set `medication`, `relationship`, `lifestyle`, `other`
     - Reject a blank or missing description, a missing date, or a category outside the set, naming each offending field and writing nothing
     - Restrict all mutations to an owner context
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 
-  - [~] 12.2 Write unit tests for milestone operations
+  - [x] 12.2 Write unit tests for milestone operations
     - Cover create, update and delete for each category in the closed set, and confirm `inRange` returns exactly the milestones whose date falls inside the given range
     - **Validates: Requirements 10.1, 10.2, 10.3**
 
-  - [~] 12.3 Write unit tests for invalid milestone input
+  - [x] 12.3 Write unit tests for invalid milestone input
     - Cover a blank description, a missing description, a missing date and a category outside the closed set; assert each is rejected, names the offending field, and writes nothing
     - **Validates: Requirements 10.4**
 
-  - [~] 12.4 Implement milestone pages and controller
+  - [-] 12.4 Implement milestone pages and controller
     - List, create, edit and delete views with the category selector; controls hidden and requests denied in a viewer context
     - _Requirements: 10.1, 10.2, 10.3, 10.5_
 

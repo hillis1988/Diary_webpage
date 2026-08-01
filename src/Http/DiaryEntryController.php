@@ -6,6 +6,8 @@ namespace Diary\Http;
 
 use Diary\Access\AccessControlService;
 use Diary\Access\Decision;
+use Diary\Ai\AiFeedbackService;
+use Diary\Ai\FeedbackOutcome;
 use Diary\Diary\DiaryEntry;
 use Diary\Diary\DiaryInputValidator;
 use Diary\Diary\DiaryService;
@@ -38,11 +40,15 @@ use Diary\Support\OperationKind;
  * (Requirement 5.5). A fresh GET never prefills from a stored entry: the
  * question set starts blank except for the date, which defaults to today.
  *
- * There is no AI_Feedback_Service yet (a later task), so a successful
- * submission redisplays the saved entry with a pending notice in place of a
- * recommendation. That notice is the only extension point this class assumes:
- * task 10 replaces it with the rendered CBT_Recommendation or its own failure
- * message.
+ * A successful submission calls {@see AiFeedbackService::generateForEntry()}
+ * after the entry is already committed, and redisplays the saved entry with
+ * the outcome rendered through the shared {@see FeedbackView} partial: the
+ * recommendation on success, or the "feedback is temporarily unavailable"
+ * notice with a retry control on failure (Requirements 6.5, 6.6). The retry
+ * control posts to {@see RETRY_FEEDBACK_PATH}, handled by
+ * {@see retryFeedback()}, which re-fetches the entry by date and re-invokes
+ * the provider - it never re-runs {@see DiaryInputValidator} or touches
+ * `diary_entries` at all.
  */
 final class DiaryEntryController
 {
@@ -51,8 +57,11 @@ final class DiaryEntryController
     /** Requirement 5.3 wording for a successful submission. */
     public const SAVED_MESSAGE = 'Your diary entry has been saved.';
 
-    /** Placeholder shown until AI_Feedback_Service (task 10) exists. */
-    public const RECOMMENDATION_PENDING_MESSAGE = 'CBT-style feedback for this entry is not available yet.';
+    /** Where the feedback retry control (Requirement 6.5) posts back to. */
+    public const RETRY_FEEDBACK_PATH = '/diary/feedback/retry';
+
+    /** The hidden field the retry form carries: which entry's date to retry. */
+    public const RETRY_DATE_FIELD = 'entry_date';
 
     public function __construct(
         private readonly AccessControlService $access,
@@ -60,6 +69,7 @@ final class DiaryEntryController
         private readonly DiaryInputValidator $validator,
         private readonly CsrfGuard $csrf,
         private readonly Clock $clock,
+        private readonly AiFeedbackService $aiFeedbackService,
     ) {
     }
 
@@ -112,6 +122,11 @@ final class DiaryEntryController
         // Always accepted here: a rejected validation returned above.
         $entry = $this->diaryService->submitEntry($owner, $validation, $this->clock)->value();
 
+        // Runs after the entry is already committed and outside that write's
+        // transaction (Requirement 6.5): nothing this call does can roll the
+        // entry back, and the entry is redisplayed whatever it returns.
+        $outcome = $this->aiFeedbackService->generateForEntry($entry, $this->clock);
+
         return Response::html(self::render(
             $this->diaryService->questionSet(),
             $entry->input()->toSubmittedAnswers(),
@@ -119,6 +134,48 @@ final class DiaryEntryController
             [],
             $this->csrf->issueFor($request),
             $entry,
+            $outcome,
+        ));
+    }
+
+    /**
+     * The feedback retry control's target (Requirement 6.5): re-fetches the
+     * entry for the given date and re-invokes the provider, updating the same
+     * `cbt_recommendations` row rather than touching `diary_entries` at all.
+     *
+     * Authorised as the same {@see OperationKind::WriteDiaryEntry} operation
+     * as the rest of this controller, so a viewer context is refused exactly
+     * as a diary entry submission would be, and an anonymous request is sent
+     * to the login page.
+     */
+    public function retryFeedback(Request $request): Response
+    {
+        $context = SessionResolverMiddleware::contextOf($request);
+
+        $denied = $this->authoriseOwnerOperation($context, self::retryOperation($request));
+        if ($denied !== null) {
+            return $denied;
+        }
+
+        $owner = $this->access->resolveDataOwner($context);
+        $date = LocalDate::tryFromString($request->formParam(self::RETRY_DATE_FIELD) ?? '');
+
+        $entry = $date !== null ? $this->diaryService->entryForDate($owner, $date) : null;
+
+        if ($entry === null) {
+            return StatusPage::response(404, Router::NOT_FOUND_HEADING, Router::NOT_FOUND_MESSAGE);
+        }
+
+        $outcome = $this->aiFeedbackService->retry($entry, $this->clock);
+
+        return Response::html(self::render(
+            $this->diaryService->questionSet(),
+            $entry->input()->toSubmittedAnswers(),
+            null,
+            [],
+            $this->csrf->issueFor($request),
+            $entry,
+            $outcome,
         ));
     }
 
@@ -133,6 +190,7 @@ final class DiaryEntryController
         array $fieldMessages,
         string $csrfToken,
         ?DiaryEntry $savedEntry,
+        ?FeedbackOutcome $feedbackOutcome = null,
     ): string {
         $safeHeading = htmlspecialchars(self::HEADING, ENT_QUOTES, 'UTF-8');
 
@@ -156,7 +214,7 @@ final class DiaryEntryController
             . '    <main id="main">' . "\n"
             . '        <p><a href="/">Home</a></p>' . "\n"
             . '        <h1>' . $safeHeading . '</h1>' . "\n"
-            . ($savedEntry !== null ? self::renderConfirmation($savedEntry) : '')
+            . ($savedEntry !== null ? self::renderConfirmation($savedEntry, $feedbackOutcome, $csrfToken) : '')
             . self::renderErrorSummary($summaryMessage, $fieldMessages)
             . '        <form method="post" action="' . AccessControlService::DIARY_ENTRY_PATH . '">' . "\n"
             . '            <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"

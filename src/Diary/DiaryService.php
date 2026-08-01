@@ -6,6 +6,7 @@ namespace Diary\Diary;
 
 use Diary\Access\OwnerId;
 use Diary\Support\Clock;
+use Diary\Support\LocalDate;
 use Diary\Support\Result;
 
 /**
@@ -52,5 +53,17 @@ final class DiaryService
         $entry = $this->repository->upsert($owner, $validation->input(), $clock);
 
         return Result::ok($entry);
+    }
+
+    /**
+     * A thin passthrough to {@see DiaryEntryRepository::findByDate()},
+     * mirroring design.md's `entryForDate` interface method. Exists so a
+     * caller re-fetching an owner's entry - the feedback retry route, a later
+     * task's entry page - goes through Diary_Service rather than reaching
+     * past it for the repository (Requirement 8.2).
+     */
+    public function entryForDate(OwnerId $owner, LocalDate $date): ?DiaryEntry
+    {
+        return $this->repository->findByDate($owner, $date);
     }
 }
