@@ -33,6 +33,14 @@ return [
         // asks. Set it to true only if IONOS terminates TLS in front of PHP and PHP therefore
         // sees a plaintext connection on every request.
         'trust_forwarded_proto' => false,
+
+        // This is a single-primary-user application: only one owner account is ever meant
+        // to exist. Registration exists so that first owner account can be created, not as
+        // an ongoing public signup form. Leave this true for a fresh/dev deployment that has
+        // no owner account yet; set it to false once the owner account has been created so
+        // /register stops being reachable by strangers. Viewer access is unaffected either
+        // way - it is granted through invitations and /accept-invitation, not this switch.
+        'registration_enabled' => true,
     ],
 
     'database' => [

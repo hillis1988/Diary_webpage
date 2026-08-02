@@ -162,9 +162,13 @@ final class CalendarController
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
             . '</head>' . "\n"
             . '<body>' . "\n"
+            . '    <header class="app-header">' . "\n"
+            . '        <div class="app-header__bar">' . "\n"
+            . '            <a class="app-header__back" href="/">Home</a>' . "\n"
+            . '            <h1 class="app-header__title">' . $safeHeading . '</h1>' . "\n"
+            . '        </div>' . "\n"
+            . '    </header>' . "\n"
             . '    <main id="main">' . "\n"
-            . '        <p><a href="/">Home</a></p>' . "\n"
-            . '        <h1>' . $safeHeading . '</h1>' . "\n"
             . self::renderMonthNav($calendarMonth->month())
             . self::renderGrid($calendarMonth, $selectedDate)
             . $detail
@@ -179,9 +183,9 @@ final class CalendarController
         $previousLink = self::monthLink($month->previous());
         $nextLink = self::monthLink($month->next());
 
-        return '        <nav>' . "\n"
+        return '        <nav class="calendar-nav">' . "\n"
             . '            <a href="' . $previousLink . '">Previous month</a>' . "\n"
-            . '            <span>' . $safeMonth . '</span>' . "\n"
+            . '            <span class="calendar-nav__month">' . $safeMonth . '</span>' . "\n"
             . '            <a href="' . $nextLink . '">Next month</a>' . "\n"
             . '        </nav>' . "\n";
     }
@@ -198,36 +202,34 @@ final class CalendarController
     private static function renderGrid(CalendarMonth $calendarMonth, ?LocalDate $selectedDate): string
     {
         $month = $calendarMonth->month();
-        $rows = '';
+        $cells = '';
 
         for ($day = 1; $day <= $month->lengthInDays(); $day++) {
             $date = LocalDate::of($month->year(), $month->month(), $day);
-            $rows .= self::renderDateRow($calendarMonth, $date, $selectedDate);
+            $cells .= self::renderDateCell($calendarMonth, $date, $selectedDate);
         }
 
-        return '        <table>' . "\n"
-            . '            <thead>' . "\n"
-            . '                <tr><th>Date</th><th>Indicators</th><th></th></tr>' . "\n"
-            . '            </thead>' . "\n"
-            . '            <tbody>' . "\n"
-            . $rows
-            . '            </tbody>' . "\n"
-            . '        </table>' . "\n";
+        return '        <div class="calendar-grid">' . "\n"
+            . $cells
+            . '        </div>' . "\n";
     }
 
-    private static function renderDateRow(CalendarMonth $calendarMonth, LocalDate $date, ?LocalDate $selectedDate): string
+    private static function renderDateCell(CalendarMonth $calendarMonth, LocalDate $date, ?LocalDate $selectedDate): string
     {
         $iso = $date->toIso();
         $safeIso = htmlspecialchars($iso, ENT_QUOTES, 'UTF-8');
+        $safeDay = htmlspecialchars((string) $date->day(), ENT_QUOTES, 'UTF-8');
 
         $indicators = [];
         if ($calendarMonth->hasEntryOn($date)) {
-            $indicators[] = '<span class="entry-indicator" aria-label="Diary entry">Entry</span>';
+            $indicators[] = '<span class="dot dot--entry entry-indicator" aria-label="Diary entry">'
+                . '<span class="visually-hidden">Entry</span></span>';
         }
         if ($calendarMonth->hasMilestoneOn($date)) {
-            $indicators[] = '<span class="milestone-indicator" aria-label="Milestone">Milestone</span>';
+            $indicators[] = '<span class="dot dot--milestone milestone-indicator" aria-label="Milestone">'
+                . '<span class="visually-hidden">Milestone</span></span>';
         }
-        $indicatorHtml = $indicators === [] ? '' : implode(' ', $indicators);
+        $indicatorHtml = $indicators === [] ? '' : implode('', $indicators);
 
         $selectPath = htmlspecialchars(
             AccessControlService::CALENDAR_PATH . '?' . self::MONTH_PARAM . '=' . $calendarMonth->month()->toIso()
@@ -237,13 +239,14 @@ final class CalendarController
         );
 
         $isSelected = $selectedDate !== null && $selectedDate->equals($date);
-        $rowAttributes = $isSelected ? ' aria-current="date"' : '';
+        $cellClass = $isSelected ? 'calendar-cell calendar-cell--selected' : 'calendar-cell';
+        $cellAttributes = $isSelected ? ' aria-current="date"' : '';
 
-        return '                <tr' . $rowAttributes . '>' . "\n"
-            . '                    <td>' . $safeIso . '</td>' . "\n"
-            . '                    <td>' . $indicatorHtml . '</td>' . "\n"
-            . '                    <td><a href="' . $selectPath . '">Select</a></td>' . "\n"
-            . '                </tr>' . "\n";
+        return '            <a class="' . $cellClass . '" href="' . $selectPath . '"' . $cellAttributes
+            . ' aria-label="Select ' . $safeIso . '">' . "\n"
+            . '                <span class="calendar-cell__day">' . $safeDay . '</span>' . "\n"
+            . '                <span class="calendar-cell__dots">' . $indicatorHtml . '</span>' . "\n"
+            . '            </a>' . "\n";
     }
 
     /**
@@ -256,7 +259,7 @@ final class CalendarController
         if ($entryDetail === null) {
             $safeMessage = htmlspecialchars(self::NO_ENTRY_MESSAGE, ENT_QUOTES, 'UTF-8');
 
-            return '        <section aria-labelledby="date-detail-heading">' . "\n"
+            return '        <section class="card" aria-labelledby="date-detail-heading">' . "\n"
                 . '            <h2 id="date-detail-heading">' . $safeDate . '</h2>' . "\n"
                 . '            <p>' . $safeMessage . '</p>' . "\n"
                 . '        </section>' . "\n";
@@ -264,7 +267,7 @@ final class CalendarController
 
         [$entry, $recommendation] = $entryDetail;
 
-        return '        <section aria-labelledby="date-detail-heading">' . "\n"
+        return '        <section class="card" aria-labelledby="date-detail-heading">' . "\n"
             . '            <h2 id="date-detail-heading">' . $safeDate . '</h2>' . "\n"
             . self::renderEntry($entry)
             . self::renderRecommendation($recommendation)

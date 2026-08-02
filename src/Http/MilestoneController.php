@@ -325,11 +325,11 @@ final class MilestoneController
         $safeHeading = htmlspecialchars(self::HEADING, ENT_QUOTES, 'UTF-8');
 
         $newLink = $isOwner
-            ? '        <p><a href="' . htmlspecialchars(self::NEW_PATH, ENT_QUOTES, 'UTF-8') . '">Add milestone</a></p>' . "\n"
+            ? '            <p><a href="' . htmlspecialchars(self::NEW_PATH, ENT_QUOTES, 'UTF-8') . '">Add milestone</a></p>' . "\n"
             : '';
 
         $body = $milestones === []
-            ? '        <p>' . htmlspecialchars(self::NO_MILESTONES_MESSAGE, ENT_QUOTES, 'UTF-8') . '</p>' . "\n"
+            ? '            <p>' . htmlspecialchars(self::NO_MILESTONES_MESSAGE, ENT_QUOTES, 'UTF-8') . '</p>' . "\n"
             : self::renderMilestoneList($milestones, $isOwner, $csrfToken);
 
         return '<!DOCTYPE html>' . "\n"
@@ -341,11 +341,17 @@ final class MilestoneController
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
             . '</head>' . "\n"
             . '<body>' . "\n"
+            . '    <header class="app-header">' . "\n"
+            . '        <div class="app-header__bar">' . "\n"
+            . '            <a class="app-header__back" href="/">Home</a>' . "\n"
+            . '            <h1 class="app-header__title">' . $safeHeading . '</h1>' . "\n"
+            . '        </div>' . "\n"
+            . '    </header>' . "\n"
             . '    <main id="main">' . "\n"
-            . '        <p><a href="/">Home</a></p>' . "\n"
-            . '        <h1>' . $safeHeading . '</h1>' . "\n"
+            . '        <div class="card">' . "\n"
             . $newLink
             . $body
+            . '        </div>' . "\n"
             . '    </main>' . "\n"
             . '</body>' . "\n"
             . '</html>' . "\n";
@@ -363,24 +369,35 @@ final class MilestoneController
         foreach ($milestones as $milestone) {
             $safeDate = htmlspecialchars($milestone->date()->toIso(), ENT_QUOTES, 'UTF-8');
             $safeDescription = htmlspecialchars($milestone->description(), ENT_QUOTES, 'UTF-8');
-            $safeCategory = htmlspecialchars(ucfirst($milestone->category()->value), ENT_QUOTES, 'UTF-8');
+            $categoryValue = $milestone->category()->value;
+            $safeCategoryClass = htmlspecialchars($categoryValue, ENT_QUOTES, 'UTF-8');
+            $safeCategory = htmlspecialchars(ucfirst($categoryValue), ENT_QUOTES, 'UTF-8');
 
             $controls = '';
             if ($isOwner) {
                 $safeEditPath = htmlspecialchars(self::editPath($milestone->id()), ENT_QUOTES, 'UTF-8');
                 $safeDeletePath = htmlspecialchars(self::deletePath($milestone->id()), ENT_QUOTES, 'UTF-8');
 
-                $controls = ' <a href="' . $safeEditPath . '">Edit</a>'
-                    . ' <form method="post" action="' . $safeDeletePath . '" style="display:inline">'
-                    . '<input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">'
-                    . '<button type="submit">Delete</button>'
-                    . '</form>';
+                $controls = '                    <div class="actions-row">' . "\n"
+                    . '                        <a class="button button--small" href="' . $safeEditPath . '">Edit</a>' . "\n"
+                    . '                        <form method="post" action="' . $safeDeletePath . '" class="form-inline">' . "\n"
+                    . '                            <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
+                    . '                            <button type="submit" class="button button--small button--secondary">Delete</button>' . "\n"
+                    . '                        </form>' . "\n"
+                    . '                    </div>' . "\n";
             }
 
-            $items .= '                <li>' . $safeDate . ' - ' . $safeDescription . ' (' . $safeCategory . ')' . $controls . '</li>' . "\n";
+            $items .= '                <li class="item-row">' . "\n"
+                . '                    <div class="item-row__main">' . "\n"
+                . '                        <span class="item-row__date">' . $safeDate . '</span>' . "\n"
+                . '                        <span>' . $safeDescription . '</span>' . "\n"
+                . '                        <span class="badge badge--category-' . $safeCategoryClass . '">' . $safeCategory . '</span>' . "\n"
+                . '                    </div>' . "\n"
+                . $controls
+                . '                </li>' . "\n";
         }
 
-        return '        <ul>' . "\n" . $items . '        </ul>' . "\n";
+        return '            <ul class="item-list">' . "\n" . $items . '            </ul>' . "\n";
     }
 
     /**
@@ -408,17 +425,23 @@ final class MilestoneController
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
             . '</head>' . "\n"
             . '<body>' . "\n"
+            . '    <header class="app-header">' . "\n"
+            . '        <div class="app-header__bar">' . "\n"
+            . '            <a class="app-header__back" href="' . AccessControlService::MILESTONES_PATH . '">Milestones</a>' . "\n"
+            . '            <h1 class="app-header__title">' . $safeHeading . '</h1>' . "\n"
+            . '        </div>' . "\n"
+            . '    </header>' . "\n"
             . '    <main id="main">' . "\n"
-            . '        <p><a href="' . AccessControlService::MILESTONES_PATH . '">Milestones</a></p>' . "\n"
-            . '        <h1>' . $safeHeading . '</h1>' . "\n"
             . self::renderErrorSummary($summaryMessage, $fieldMessages)
+            . '        <div class="card">' . "\n"
             . '        <form method="post" action="' . $safeAction . '">' . "\n"
             . '            <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
             . self::renderDateField($submission, $fieldMessages)
             . self::renderDescriptionField($submission, $fieldMessages)
             . self::renderCategoryField($submission, $fieldMessages)
-            . '            <button type="submit">Save milestone</button>' . "\n"
+            . '            <button type="submit" class="button">Save milestone</button>' . "\n"
             . '        </form>' . "\n"
+            . '        </div>' . "\n"
             . '    </main>' . "\n"
             . '</body>' . "\n"
             . '</html>' . "\n";
@@ -442,7 +465,7 @@ final class MilestoneController
                 . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</a></li>' . "\n";
         }
 
-        return '        <div role="alert">' . "\n"
+        return '        <div role="alert" class="notice notice--error">' . "\n"
             . '            <p>' . $safeSummary . '</p>' . "\n"
             . '            <ul>' . "\n"
             . $items
@@ -460,7 +483,7 @@ final class MilestoneController
         $error = self::renderFieldError($field, $fieldMessages);
         $describedBy = $error === '' ? '' : ' aria-describedby="' . $field . '-error"';
 
-        return '            <div>' . "\n"
+        return '            <div class="field-group">' . "\n"
             . '                <label for="' . $field . '">Date</label>' . "\n"
             . '                <input type="date" id="' . $field . '" name="' . $field . '" value="' . $safeValue . '" required' . $describedBy . '>' . "\n"
             . $error
@@ -477,7 +500,7 @@ final class MilestoneController
         $error = self::renderFieldError($field, $fieldMessages);
         $describedBy = $error === '' ? '' : ' aria-describedby="' . $field . '-error"';
 
-        return '            <div>' . "\n"
+        return '            <div class="field-group">' . "\n"
             . '                <label for="' . $field . '">Description</label>' . "\n"
             . '                <textarea id="' . $field . '" name="' . $field . '"' . $describedBy . '>' . $safeValue . '</textarea>' . "\n"
             . $error
@@ -502,7 +525,7 @@ final class MilestoneController
             $options .= '                <option value="' . $safeValue . '"' . $selected . '>' . $safeLabel . '</option>' . "\n";
         }
 
-        return '            <div>' . "\n"
+        return '            <div class="field-group">' . "\n"
             . '                <label for="' . $field . '">Category</label>' . "\n"
             . '                <select id="' . $field . '" name="' . $field . '" required' . $describedBy . '>' . "\n"
             . $options

@@ -62,7 +62,7 @@ final class HomePageController
 
         $links = '';
         foreach ($navigation as $item) {
-            $links .= '                <li><a href="' . htmlspecialchars($item->path, ENT_QUOTES, 'UTF-8') . '">'
+            $links .= '                    <li><a class="nav-grid__link" href="' . htmlspecialchars($item->path, ENT_QUOTES, 'UTF-8') . '">'
                 . htmlspecialchars($item->label, ENT_QUOTES, 'UTF-8') . '</a></li>' . "\n";
         }
 
@@ -77,14 +77,20 @@ final class HomePageController
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
             . '</head>' . "\n"
             . '<body>' . "\n"
+            . '    <header class="app-header">' . "\n"
+            . '        <div class="app-header__bar">' . "\n"
+            . '            <h1 class="app-header__title">' . $safeBanner . '</h1>' . "\n"
+            . '        </div>' . "\n"
+            . '    </header>' . "\n"
             . '    <main id="main">' . "\n"
-            . '        <h1>' . $safeBanner . '</h1>' . "\n"
-            . '        <nav aria-label="Main">' . "\n"
-            . '            <ul>' . "\n"
+            . '        <div class="card">' . "\n"
+            . '            <nav aria-label="Main">' . "\n"
+            . '                <ul class="nav-grid">' . "\n"
             . $links
-            . '            </ul>' . "\n"
-            . '        </nav>' . "\n"
+            . '                </ul>' . "\n"
+            . '            </nav>' . "\n"
             . $signOutForm
+            . '        </div>' . "\n"
             . '    </main>' . "\n"
             . '</body>' . "\n"
             . '</html>' . "\n";
@@ -97,9 +103,9 @@ final class HomePageController
         $safeAction = htmlspecialchars(AccessControlService::LOGOUT_PATH, ENT_QUOTES, 'UTF-8');
         $safeLabel = htmlspecialchars(self::SIGN_OUT_LABEL, ENT_QUOTES, 'UTF-8');
 
-        return '        <form method="post" action="' . $safeAction . '">' . "\n"
-            . '            <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
-            . '            <button type="submit">' . $safeLabel . '</button>' . "\n"
-            . '        </form>' . "\n";
+        return '            <form method="post" action="' . $safeAction . '" class="form-inline">' . "\n"
+            . '                <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
+            . '                <button type="submit" class="button button--secondary">' . $safeLabel . '</button>' . "\n"
+            . '            </form>' . "\n";
     }
 }

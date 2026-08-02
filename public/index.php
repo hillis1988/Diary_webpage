@@ -122,6 +122,7 @@ $appConfig = is_array($config['app'] ?? null) ? $config['app'] : [];
 $baseUrl = is_string($appConfig['base_url'] ?? null) ? $appConfig['base_url'] : 'https://royhillis.co.uk';
 $forceHttps = (bool) ($appConfig['force_https'] ?? true);
 $trustForwardedProto = (bool) ($appConfig['trust_forwarded_proto'] ?? false);
+$registrationEnabled = (bool) ($appConfig['registration_enabled'] ?? true);
 
 // The CSRF signing secret is derived from the master key, so there is no second secret to
 // deploy and no path where a missing key silently turns the CSRF check into a no-op.
@@ -193,7 +194,7 @@ $loginPage = new LoginController($accessControl, $authService, $csrfGuard, $cloc
 $router->get(AccessControlService::LOGIN_PATH, static fn (Request $r, array $params) => $loginPage->show($r));
 $router->post(AccessControlService::LOGIN_PATH, static fn (Request $r, array $params) => $loginPage->submit($r));
 
-$registrationPage = new RegistrationController($accessControl, $authService, $csrfGuard, $clock);
+$registrationPage = new RegistrationController($accessControl, $authService, $csrfGuard, $clock, $registrationEnabled);
 $router->get(AccessControlService::REGISTER_PATH, static fn (Request $r, array $params) => $registrationPage->show($r));
 $router->post(AccessControlService::REGISTER_PATH, static fn (Request $r, array $params) => $registrationPage->submit($r));
 

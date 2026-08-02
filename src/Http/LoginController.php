@@ -142,23 +142,29 @@ final class LoginController
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
             . '</head>' . "\n"
             . '<body>' . "\n"
+            . '    <header class="app-header">' . "\n"
+            . '        <div class="app-header__bar">' . "\n"
+            . '            <h1 class="app-header__title">' . $safeHeading . '</h1>' . "\n"
+            . '        </div>' . "\n"
+            . '    </header>' . "\n"
             . '    <main id="main">' . "\n"
-            . '        <h1>' . $safeHeading . '</h1>' . "\n"
+            . '        <div class="card">' . "\n"
             . $error
-            . '        <form method="post" action="' . htmlspecialchars(AccessControlService::LOGIN_PATH, ENT_QUOTES, 'UTF-8') . '">' . "\n"
-            . '            <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
+            . '            <form method="post" action="' . htmlspecialchars(AccessControlService::LOGIN_PATH, ENT_QUOTES, 'UTF-8') . '">' . "\n"
+            . '                <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
             . $nextField
-            . '            <div>' . "\n"
-            . '                <label for="' . self::EMAIL_FIELD . '">Email address</label>' . "\n"
-            . '                <input type="email" id="' . self::EMAIL_FIELD . '" name="' . self::EMAIL_FIELD . '" value="' . $safeEmailValue . '" required autocomplete="username"' . $describedBy . '>' . "\n"
-            . '            </div>' . "\n"
-            . '            <div>' . "\n"
-            . '                <label for="' . self::PASSWORD_FIELD . '">Password</label>' . "\n"
-            . '                <input type="password" id="' . self::PASSWORD_FIELD . '" name="' . self::PASSWORD_FIELD . '" required autocomplete="current-password"' . $describedBy . '>' . "\n"
-            . '            </div>' . "\n"
-            . '            <button type="submit">Sign in</button>' . "\n"
-            . '        </form>' . "\n"
-            . '        <p><a href="' . htmlspecialchars(AccessControlService::REGISTER_PATH, ENT_QUOTES, 'UTF-8') . '">Create an account</a></p>' . "\n"
+            . '                <div class="field-group">' . "\n"
+            . '                    <label for="' . self::EMAIL_FIELD . '">Email address</label>' . "\n"
+            . '                    <input type="email" id="' . self::EMAIL_FIELD . '" name="' . self::EMAIL_FIELD . '" value="' . $safeEmailValue . '" required autocomplete="username"' . $describedBy . '>' . "\n"
+            . '                </div>' . "\n"
+            . '                <div class="field-group">' . "\n"
+            . '                    <label for="' . self::PASSWORD_FIELD . '">Password</label>' . "\n"
+            . '                    <input type="password" id="' . self::PASSWORD_FIELD . '" name="' . self::PASSWORD_FIELD . '" required autocomplete="current-password"' . $describedBy . '>' . "\n"
+            . '                </div>' . "\n"
+            . '                <button type="submit" class="button">Sign in</button>' . "\n"
+            . '            </form>' . "\n"
+            . '            <p><a href="' . htmlspecialchars(AccessControlService::REGISTER_PATH, ENT_QUOTES, 'UTF-8') . '">Create an account</a></p>' . "\n"
+            . '        </div>' . "\n"
             . '    </main>' . "\n"
             . '</body>' . "\n"
             . '</html>' . "\n";
@@ -172,9 +178,9 @@ final class LoginController
 
         $safeMessage = htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8');
 
-        return '        <div role="alert" id="login-error">' . "\n"
-            . '            <p>' . $safeMessage . '</p>' . "\n"
-            . '        </div>' . "\n";
+        return '            <div role="alert" id="login-error" class="notice notice--error">' . "\n"
+            . '                <p>' . $safeMessage . '</p>' . "\n"
+            . '            </div>' . "\n";
     }
 
     /**

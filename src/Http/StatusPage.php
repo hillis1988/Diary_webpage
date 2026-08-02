@@ -39,8 +39,10 @@ final class StatusPage
             . '</head>' . "\n"
             . '<body>' . "\n"
             . '    <main id="main">' . "\n"
-            . '        <h1>' . $safeHeading . '</h1>' . "\n"
-            . '        <p>' . $safeMessage . '</p>' . "\n"
+            . '        <div class="card">' . "\n"
+            . '            <h1>' . $safeHeading . '</h1>' . "\n"
+            . '            <p>' . $safeMessage . '</p>' . "\n"
+            . '        </div>' . "\n"
             . '    </main>' . "\n"
             . '</body>' . "\n"
             . '</html>' . "\n";

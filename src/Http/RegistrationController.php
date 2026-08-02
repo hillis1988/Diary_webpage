@@ -42,21 +42,36 @@ use Diary\Support\OperationKind;
  * check, rather than a second, parallel way of minting one here. The redirect
  * that follows lands on the home page, not the login page - registering is
  * meant to be the whole of "getting in", not a detour through signing in again.
+ *
+ * This is a single-primary-user application (Requirement 1.1), so registration
+ * is only ever meant to create that one owner account. Once it exists,
+ * `$registrationEnabled` is set to false and both verbs short-circuit to a
+ * plain "Registration is closed" page ({@see self::renderClosed()}) before
+ * touching authorisation, {@see AuthService} or anything else - Requirement
+ * 7.5. `/accept-invitation` ({@see AcceptInvitationController}) is a separate
+ * controller and is not affected by this switch.
  */
 final class RegistrationController
 {
     public const HEADING = 'Create your account';
+    public const CLOSED_HEADING = 'Registration is closed';
+    public const CLOSED_MESSAGE = 'Registration is closed.';
 
     public function __construct(
         private readonly AccessControlService $access,
         private readonly AuthService $authService,
         private readonly CsrfGuard $csrf,
         private readonly Clock $clock,
+        private readonly bool $registrationEnabled = true,
     ) {
     }
 
     public function show(Request $request): Response
     {
+        if (!$this->registrationEnabled) {
+            return self::renderClosed();
+        }
+
         $context = SessionResolverMiddleware::contextOf($request);
 
         $denied = $this->authorise($context, self::viewOperation($request));
@@ -69,6 +84,10 @@ final class RegistrationController
 
     public function submit(Request $request): Response
     {
+        if (!$this->registrationEnabled) {
+            return self::renderClosed();
+        }
+
         $context = SessionResolverMiddleware::contextOf($request);
 
         $denied = $this->authorise($context, self::submitOperation($request));
@@ -115,19 +134,36 @@ final class RegistrationController
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
             . '</head>' . "\n"
             . '<body>' . "\n"
+            . '    <header class="app-header">' . "\n"
+            . '        <div class="app-header__bar">' . "\n"
+            . '            <h1 class="app-header__title">' . $safeHeading . '</h1>' . "\n"
+            . '        </div>' . "\n"
+            . '    </header>' . "\n"
             . '    <main id="main">' . "\n"
-            . '        <p><a href="' . AccessControlService::LOGIN_PATH . '">Already have an account? Sign in</a></p>' . "\n"
-            . '        <h1>' . $safeHeading . '</h1>' . "\n"
+            . '        <div class="card">' . "\n"
+            . '            <p><a href="' . AccessControlService::LOGIN_PATH . '">Already have an account? Sign in</a></p>' . "\n"
             . self::renderErrorSummary($summaryMessage, $fieldMessages)
-            . '        <form method="post" action="' . AccessControlService::REGISTER_PATH . '">' . "\n"
-            . '            <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
+            . '            <form method="post" action="' . AccessControlService::REGISTER_PATH . '">' . "\n"
+            . '                <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
             . self::renderEmailField($email, $fieldMessages)
             . self::renderPasswordField($fieldMessages)
-            . '            <button type="submit">Create account</button>' . "\n"
-            . '        </form>' . "\n"
+            . '                <button type="submit" class="button">Create account</button>' . "\n"
+            . '            </form>' . "\n"
+            . '        </div>' . "\n"
             . '    </main>' . "\n"
             . '</body>' . "\n"
             . '</html>' . "\n";
+    }
+
+    /**
+     * The response for both verbs when registration is switched off: a plain
+     * status-style page with no form and nothing to submit, so no CSRF token
+     * is needed. Deliberately bypasses authorisation and {@see AuthService}
+     * entirely - there is nothing to authorise or register.
+     */
+    private static function renderClosed(): Response
+    {
+        return StatusPage::response(200, self::CLOSED_HEADING, self::CLOSED_MESSAGE);
     }
 
     /**
@@ -203,16 +239,16 @@ final class RegistrationController
         $items = '';
         foreach ($fieldMessages as $field => $message) {
             $safeField = htmlspecialchars($field, ENT_QUOTES, 'UTF-8');
-            $items .= '                <li><a href="#' . $safeField . '">'
+            $items .= '                    <li><a href="#' . $safeField . '">'
                 . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</a></li>' . "\n";
         }
 
-        return '        <div role="alert">' . "\n"
-            . '            <p>' . $safeSummary . '</p>' . "\n"
-            . '            <ul>' . "\n"
+        return '            <div role="alert" class="notice notice--error">' . "\n"
+            . '                <p>' . $safeSummary . '</p>' . "\n"
+            . '                <ul>' . "\n"
             . $items
-            . '            </ul>' . "\n"
-            . '        </div>' . "\n";
+            . '                </ul>' . "\n"
+            . '            </div>' . "\n";
     }
 
     /**
@@ -225,11 +261,11 @@ final class RegistrationController
         $error = self::renderFieldError($field, $fieldMessages);
         $describedBy = $error === '' ? '' : ' aria-describedby="' . $field . '-error"';
 
-        return '            <div>' . "\n"
-            . '                <label for="' . $field . '">Email address</label>' . "\n"
-            . '                <input type="email" id="' . $field . '" name="' . $field . '" value="' . $safeValue . '" autocomplete="email" required' . $describedBy . '>' . "\n"
+        return '                <div class="field-group">' . "\n"
+            . '                    <label for="' . $field . '">Email address</label>' . "\n"
+            . '                    <input type="email" id="' . $field . '" name="' . $field . '" value="' . $safeValue . '" autocomplete="email" required' . $describedBy . '>' . "\n"
             . $error
-            . '            </div>' . "\n";
+            . '                </div>' . "\n";
     }
 
     /**
@@ -246,12 +282,12 @@ final class RegistrationController
         $safeHint = htmlspecialchars(DefaultPasswordPolicy::MESSAGE, ENT_QUOTES, 'UTF-8');
         $describedBy = ' aria-describedby="' . $hintId . ($error === '' ? '' : ' ' . $field . '-error') . '"';
 
-        return '            <div>' . "\n"
-            . '                <label for="' . $field . '">Password</label>' . "\n"
-            . '                <input type="password" id="' . $field . '" name="' . $field . '" autocomplete="new-password" required' . $describedBy . '>' . "\n"
-            . '                <p id="' . $hintId . '">' . $safeHint . '</p>' . "\n"
+        return '                <div class="field-group">' . "\n"
+            . '                    <label for="' . $field . '">Password</label>' . "\n"
+            . '                    <input type="password" id="' . $field . '" name="' . $field . '" autocomplete="new-password" required' . $describedBy . '>' . "\n"
+            . '                    <p id="' . $hintId . '" class="muted">' . $safeHint . '</p>' . "\n"
             . $error
-            . '            </div>' . "\n";
+            . '                </div>' . "\n";
     }
 
     /**
@@ -266,6 +302,6 @@ final class RegistrationController
         $safeField = htmlspecialchars($field, ENT_QUOTES, 'UTF-8');
         $safeMessage = htmlspecialchars($fieldMessages[$field], ENT_QUOTES, 'UTF-8');
 
-        return '                <p id="' . $safeField . '-error">' . $safeMessage . '</p>' . "\n";
+        return '                    <p id="' . $safeField . '-error" class="field-error">' . $safeMessage . '</p>' . "\n";
     }
 }

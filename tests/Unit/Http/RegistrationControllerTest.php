@@ -169,4 +169,101 @@ final class RegistrationControllerTest extends TestCase
         self::assertSame(0, $this->userCount(), 'a rejected registration writes nothing');
         self::assertSame(0, $this->sessionCount());
     }
+
+    /**
+     * Requirement 7.5: once the owner account exists, `registration_enabled`
+     * is switched off and `GET /register` must render the closed page
+     * instead of the form, without touching {@see AuthService} or the
+     * database at all.
+     */
+    public function testShowWithRegistrationDisabledRendersTheClosedMessageAndCreatesNoAccount(): void
+    {
+        $controller = $this->controllerWithRegistrationEnabled(false);
+
+        $response = $controller->show($this->getRequest());
+        $html = $response->body();
+
+        self::assertSame(200, $response->status());
+        self::assertStringContainsString(RegistrationController::CLOSED_MESSAGE, $html);
+        self::assertStringNotContainsString(CsrfGuard::FIELD_NAME, $html, 'the closed page has no form to submit');
+        self::assertSame(0, $this->userCount());
+        self::assertSame(0, $this->sessionCount());
+    }
+
+    /**
+     * Requirement 7.5: `POST /register` while disabled must also render the
+     * closed page, and must do so before any CSRF check, authorisation
+     * check, or write - a submission with no CSRF token at all must still
+     * be rejected with the closed message rather than a CSRF error, and
+     * must create no account or session.
+     */
+    public function testSubmitWithRegistrationDisabledRendersTheClosedMessageAndCreatesNoAccountOrSession(): void
+    {
+        $controller = $this->controllerWithRegistrationEnabled(false);
+
+        $request = $this->postRequest(AccessControlService::REGISTER_PATH, [
+            AuthService::EMAIL_FIELD => 'roy@example.com',
+            PasswordPolicy::FIELD => self::PASSWORD,
+        ]);
+
+        $response = $controller->submit($request);
+        $html = $response->body();
+
+        self::assertSame(200, $response->status());
+        self::assertStringContainsString(RegistrationController::CLOSED_MESSAGE, $html);
+        self::assertSame(0, $this->userCount(), 'a disabled registration writes nothing, even with valid-looking credentials');
+        self::assertSame(0, $this->sessionCount());
+    }
+
+    /**
+     * Requirement 7.5: the default behaviour (`registration_enabled` true,
+     * matching existing/dev configs) is unchanged by the new constructor
+     * parameter - `show` still renders the ordinary registration form.
+     */
+    public function testShowWithRegistrationEnabledStillRendersTheOrdinaryForm(): void
+    {
+        $controller = $this->controllerWithRegistrationEnabled(true);
+
+        $response = $controller->show($this->getRequest());
+        $html = $response->body();
+
+        self::assertSame(200, $response->status());
+        self::assertStringContainsString(CsrfGuard::FIELD_NAME, $html);
+        self::assertStringNotContainsString(RegistrationController::CLOSED_MESSAGE, $html);
+    }
+
+    /**
+     * Requirement 7.5: with `registration_enabled` true, a valid submission
+     * still registers the owner and signs them in, exactly as it did before
+     * the flag was introduced.
+     */
+    public function testSubmitWithRegistrationEnabledStillRegistersAndSignsInTheOwner(): void
+    {
+        $controller = $this->controllerWithRegistrationEnabled(true);
+
+        $token = $this->csrf->issueFor($this->getRequest());
+        $request = $this->postRequest(AccessControlService::REGISTER_PATH, [
+            CsrfGuard::FIELD_NAME => $token,
+            AuthService::EMAIL_FIELD => 'roy@example.com',
+            PasswordPolicy::FIELD => self::PASSWORD,
+        ]);
+
+        $response = $controller->submit($request);
+
+        self::assertSame(302, $response->status());
+        self::assertSame('/', $response->header('Location'));
+        self::assertSame(1, $this->userCount());
+        self::assertSame(1, $this->sessionCount());
+    }
+
+    private function controllerWithRegistrationEnabled(bool $registrationEnabled): RegistrationController
+    {
+        return new RegistrationController(
+            $this->access,
+            $this->authService,
+            $this->csrf,
+            $this->clock,
+            $registrationEnabled,
+        );
+    }
 }

@@ -211,17 +211,23 @@ final class DiaryEntryController
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
             . '</head>' . "\n"
             . '<body>' . "\n"
+            . '    <header class="app-header">' . "\n"
+            . '        <div class="app-header__bar">' . "\n"
+            . '            <a class="app-header__back" href="/">Home</a>' . "\n"
+            . '            <h1 class="app-header__title">' . $safeHeading . '</h1>' . "\n"
+            . '        </div>' . "\n"
+            . '    </header>' . "\n"
             . '    <main id="main">' . "\n"
-            . '        <p><a href="/">Home</a></p>' . "\n"
-            . '        <h1>' . $safeHeading . '</h1>' . "\n"
             . ($savedEntry !== null ? self::renderConfirmation($savedEntry, $feedbackOutcome, $csrfToken) : '')
             . self::renderErrorSummary($summaryMessage, $fieldMessages)
+            . '        <div class="card">' . "\n"
             . '        <form method="post" action="' . AccessControlService::DIARY_ENTRY_PATH . '">' . "\n"
             . '            <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
             . self::renderDateField($answers, $fieldMessages)
             . $questionFields
-            . '            <button type="submit">Save entry</button>' . "\n"
+            . '            <button type="submit" class="button">Save entry</button>' . "\n"
             . '        </form>' . "\n"
+            . '        </div>' . "\n"
             . '    </main>' . "\n"
             . '</body>' . "\n"
             . '</html>' . "\n";
@@ -281,10 +287,12 @@ final class DiaryEntryController
             )
             : '';
 
-        return '        <div role="status">' . "\n"
+        return '        <div class="card">' . "\n"
+            . '        <div role="status" class="notice notice--success">' . "\n"
             . '            <p>' . $safeMessage . ' (' . $safeDate . ')</p>' . "\n"
             . '        </div>' . "\n"
-            . $feedback;
+            . $feedback
+            . '        </div>' . "\n";
     }
 
     /**
@@ -305,7 +313,7 @@ final class DiaryEntryController
                 . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</a></li>' . "\n";
         }
 
-        return '        <div role="alert">' . "\n"
+        return '        <div role="alert" class="notice notice--error">' . "\n"
             . '            <p>' . $safeSummary . '</p>' . "\n"
             . '            <ul>' . "\n"
             . $items
@@ -323,7 +331,7 @@ final class DiaryEntryController
         $error = self::renderFieldError($field, $fieldMessages);
         $describedBy = $error === '' ? '' : ' aria-describedby="' . $field . '-error"';
 
-        return '            <div>' . "\n"
+        return '            <div class="field-group">' . "\n"
             . '                <label for="' . $field . '">Date</label>' . "\n"
             . '                <input type="date" id="' . $field . '" name="' . $field . '" value="' . $safeValue . '" required' . $describedBy . '>' . "\n"
             . $error
@@ -371,7 +379,7 @@ final class DiaryEntryController
                 . '</option>' . "\n";
         }
 
-        return '            <div>' . "\n"
+        return '            <div class="field-group">' . "\n"
             . '                <label for="' . $safeField . '">' . $safeLabel . '</label>' . "\n"
             . '                <select id="' . $safeField . '" name="' . $safeField . '"' . $requiredAttr . $describedBy . '>' . "\n"
             . $options
@@ -395,7 +403,7 @@ final class DiaryEntryController
         $error = self::renderFieldError($field, $fieldMessages);
         $describedBy = $error === '' ? '' : ' aria-describedby="' . $safeField . '-error"';
 
-        return '            <div>' . "\n"
+        return '            <div class="field-group">' . "\n"
             . '                <label for="' . $safeField . '">' . $safeLabel . '</label>' . "\n"
             . '                <textarea id="' . $safeField . '" name="' . $safeField . '"' . $describedBy . '>' . $safeValue . '</textarea>' . "\n"
             . $error

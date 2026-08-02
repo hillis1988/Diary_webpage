@@ -12,6 +12,7 @@ use Diary\Ai\SummaryOutcome;
 use Diary\Ai\TrendDirection;
 use Diary\Ai\TrendMetrics;
 use Diary\Auth\SecurityContext;
+use Diary\Diary\QuestionSet;
 use Diary\Support\Clock;
 use Diary\Support\DateRange;
 use Diary\Support\LocalDate;
@@ -148,10 +149,16 @@ final class SummaryController
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
             . '</head>' . "\n"
             . '<body>' . "\n"
+            . '    <header class="app-header">' . "\n"
+            . '        <div class="app-header__bar">' . "\n"
+            . '            <a class="app-header__back" href="/">Home</a>' . "\n"
+            . '            <h1 class="app-header__title">' . $safeHeading . '</h1>' . "\n"
+            . '        </div>' . "\n"
+            . '    </header>' . "\n"
             . '    <main id="main">' . "\n"
-            . '        <p><a href="/">Home</a></p>' . "\n"
-            . '        <h1>' . $safeHeading . '</h1>' . "\n"
+            . '        <div class="card">' . "\n"
             . self::renderRangePicker($formRange)
+            . '        </div>' . "\n"
             . ($outcome !== null ? self::renderOutcome($outcome) : '')
             . '    </main>' . "\n"
             . '</body>' . "\n"
@@ -164,17 +171,17 @@ final class SummaryController
         $safeEnd = htmlspecialchars($formRange->end()->toIso(), ENT_QUOTES, 'UTF-8');
         $safeAction = htmlspecialchars(AccessControlService::SUMMARY_PATH, ENT_QUOTES, 'UTF-8');
 
-        return '        <form method="get" action="' . $safeAction . '">' . "\n"
-            . '            <div>' . "\n"
-            . '                <label for="' . self::START_PARAM . '">Start date</label>' . "\n"
-            . '                <input type="date" id="' . self::START_PARAM . '" name="' . self::START_PARAM . '" value="' . $safeStart . '" required>' . "\n"
-            . '            </div>' . "\n"
-            . '            <div>' . "\n"
-            . '                <label for="' . self::END_PARAM . '">End date</label>' . "\n"
-            . '                <input type="date" id="' . self::END_PARAM . '" name="' . self::END_PARAM . '" value="' . $safeEnd . '" required>' . "\n"
-            . '            </div>' . "\n"
-            . '            <button type="submit">View summary</button>' . "\n"
-            . '        </form>' . "\n";
+        return '            <form method="get" action="' . $safeAction . '">' . "\n"
+            . '                <div class="field-group">' . "\n"
+            . '                    <label for="' . self::START_PARAM . '">Start date</label>' . "\n"
+            . '                    <input type="date" id="' . self::START_PARAM . '" name="' . self::START_PARAM . '" value="' . $safeStart . '" required>' . "\n"
+            . '                </div>' . "\n"
+            . '                <div class="field-group">' . "\n"
+            . '                    <label for="' . self::END_PARAM . '">End date</label>' . "\n"
+            . '                    <input type="date" id="' . self::END_PARAM . '" name="' . self::END_PARAM . '" value="' . $safeEnd . '" required>' . "\n"
+            . '                </div>' . "\n"
+            . '                <button type="submit" class="button">View summary</button>' . "\n"
+            . '            </form>' . "\n";
     }
 
     /**
@@ -190,7 +197,7 @@ final class SummaryController
             default => self::renderMessage($outcome->reason() ?? SummaryOutcome::UNAVAILABLE_MESSAGE),
         };
 
-        return '        <div class="ai-summary">' . "\n"
+        return '        <div class="ai-summary card">' . "\n"
             . $body
             . FeedbackView::renderDisclaimer()
             . '        </div>' . "\n";
@@ -210,16 +217,23 @@ final class SummaryController
         return '            <dl>' . "\n"
             . '                <dt>Entries considered</dt><dd>' . $metrics->entryCount() . '</dd>' . "\n"
             . '            </dl>' . "\n"
-            . self::renderSeries('Mood rating', $metrics->mood())
-            . self::renderSeries('Sleep quality', $metrics->sleep());
+            . self::renderSeries('Mood rating', $metrics->mood(), QuestionSet::MOOD_MIN, QuestionSet::MOOD_MAX)
+            . self::renderSeries('Sleep quality', $metrics->sleep(), QuestionSet::SLEEP_MIN, QuestionSet::SLEEP_MAX);
     }
 
-    private static function renderSeries(string $label, SeriesStats $stats): string
+    /**
+     * The series' existing numeric breakdown (unchanged), plus a min-max
+     * range bar with the mean marked and a direction badge - both derived
+     * purely from what {@see SeriesStats} already exposes, positioned as
+     * percentages of the question's fixed scale ($scaleMin-$scaleMax).
+     */
+    private static function renderSeries(string $label, SeriesStats $stats, int $scaleMin, int $scaleMax): string
     {
         $safeLabel = htmlspecialchars($label, ENT_QUOTES, 'UTF-8');
         $safeDirection = htmlspecialchars(self::directionLabel($stats->direction()), ENT_QUOTES, 'UTF-8');
 
         return '            <h2>' . $safeLabel . '</h2>' . "\n"
+            . self::renderTrendBar($stats, $scaleMin, $scaleMax)
             . '            <dl>' . "\n"
             . '                <dt>Count</dt><dd>' . $stats->count() . '</dd>' . "\n"
             . '                <dt>Mean</dt><dd>' . self::formatNullableNumber($stats->mean()) . '</dd>' . "\n"
@@ -227,6 +241,64 @@ final class SummaryController
             . '                <dt>Maximum</dt><dd>' . self::formatNullableNumber($stats->max()) . '</dd>' . "\n"
             . '                <dt>Direction</dt><dd>' . $safeDirection . '</dd>' . "\n"
             . '            </dl>' . "\n";
+    }
+
+    /**
+     * A `.trend` gauge: the track spans the question's fixed scale, `.trend__fill`
+     * covers the observed min-max range, `.trend__mean` marks the mean within it,
+     * and a `.badge--direction-*` names the direction - rendered only when there
+     * is at least one value in the series, since an empty series has no
+     * min/max/mean to place on the track.
+     */
+    private static function renderTrendBar(SeriesStats $stats, int $scaleMin, int $scaleMax): string
+    {
+        $min = $stats->min();
+        $max = $stats->max();
+        $mean = $stats->mean();
+
+        if ($min === null || $max === null || $mean === null) {
+            return '';
+        }
+
+        $scaleSpan = $scaleMax - $scaleMin;
+        $minPercent = self::percentOfScale($min, $scaleMin, $scaleSpan);
+        $maxPercent = self::percentOfScale($max, $scaleMin, $scaleSpan);
+        $widthPercent = max(0.0, $maxPercent - $minPercent);
+        $meanPercent = self::percentOfScale($mean, $scaleMin, $scaleSpan);
+
+        $directionValue = htmlspecialchars($stats->direction()->value, ENT_QUOTES, 'UTF-8');
+        $safeDirectionLabel = htmlspecialchars(self::directionLabel($stats->direction()), ENT_QUOTES, 'UTF-8');
+
+        return '            <div class="trend">' . "\n"
+            . '                <div class="trend__label">' . "\n"
+            . '                    <span>' . self::formatNullableNumber($min) . '</span>' . "\n"
+            . '                    <span>' . self::formatNullableNumber($max) . '</span>' . "\n"
+            . '                </div>' . "\n"
+            . '                <div class="trend__track">' . "\n"
+            . '                    <div class="trend__fill" style="left: ' . self::formatPercent($minPercent) . '%; width: ' . self::formatPercent($widthPercent) . '%;"></div>' . "\n"
+            . '                    <div class="trend__mean" style="left: ' . self::formatPercent($meanPercent) . '%;"></div>' . "\n"
+            . '                </div>' . "\n"
+            . '                <div class="trend__direction">' . "\n"
+            . '                    <span class="badge badge--direction-' . $directionValue . '">' . $safeDirectionLabel . '</span>' . "\n"
+            . '                </div>' . "\n"
+            . '            </div>' . "\n";
+    }
+
+    /** A value's position along [$scaleMin, $scaleMin + $scaleSpan] as 0-100, clamped. */
+    private static function percentOfScale(int|float $value, int $scaleMin, int $scaleSpan): float
+    {
+        if ($scaleSpan <= 0) {
+            return 0.0;
+        }
+
+        $percent = (($value - $scaleMin) / $scaleSpan) * 100;
+
+        return max(0.0, min(100.0, $percent));
+    }
+
+    private static function formatPercent(float $percent): string
+    {
+        return number_format($percent, 1);
     }
 
     private static function directionLabel(TrendDirection $direction): string

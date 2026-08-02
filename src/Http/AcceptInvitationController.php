@@ -150,15 +150,21 @@ final class AcceptInvitationController
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
             . '</head>' . "\n"
             . '<body>' . "\n"
+            . '    <header class="app-header">' . "\n"
+            . '        <div class="app-header__bar">' . "\n"
+            . '            <h1 class="app-header__title">' . $safeHeading . '</h1>' . "\n"
+            . '        </div>' . "\n"
+            . '    </header>' . "\n"
             . '    <main id="main">' . "\n"
-            . '        <h1>' . $safeHeading . '</h1>' . "\n"
+            . '        <div class="card">' . "\n"
             . self::renderErrorSummary($summaryMessage, $fieldMessages)
-            . '        <form method="post" action="' . $safeAction . '">' . "\n"
-            . '            <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
-            . '            <input type="hidden" name="' . $safeTokenField . '" value="' . $safeToken . '">' . "\n"
+            . '            <form method="post" action="' . $safeAction . '">' . "\n"
+            . '                <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
+            . '                <input type="hidden" name="' . $safeTokenField . '" value="' . $safeToken . '">' . "\n"
             . self::renderPasswordField($fieldMessages)
-            . '            <button type="submit">Set password</button>' . "\n"
-            . '        </form>' . "\n"
+            . '                <button type="submit" class="button">Set password</button>' . "\n"
+            . '            </form>' . "\n"
+            . '        </div>' . "\n"
             . '    </main>' . "\n"
             . '</body>' . "\n"
             . '</html>' . "\n";
@@ -179,10 +185,16 @@ final class AcceptInvitationController
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
             . '</head>' . "\n"
             . '<body>' . "\n"
+            . '    <header class="app-header">' . "\n"
+            . '        <div class="app-header__bar">' . "\n"
+            . '            <h1 class="app-header__title">' . $safeHeading . '</h1>' . "\n"
+            . '        </div>' . "\n"
+            . '    </header>' . "\n"
             . '    <main id="main">' . "\n"
-            . '        <h1>' . $safeHeading . '</h1>' . "\n"
-            . '        <p>' . $safeMessage . '</p>' . "\n"
-            . '        <p><a href="' . $safeLoginPath . '">Sign in</a></p>' . "\n"
+            . '        <div class="card">' . "\n"
+            . '            <p>' . $safeMessage . '</p>' . "\n"
+            . '            <p><a href="' . $safeLoginPath . '">Sign in</a></p>' . "\n"
+            . '        </div>' . "\n"
             . '    </main>' . "\n"
             . '</body>' . "\n"
             . '</html>' . "\n";
@@ -272,16 +284,16 @@ final class AcceptInvitationController
         $items = '';
         foreach ($fieldMessages as $field => $message) {
             $safeField = htmlspecialchars($field, ENT_QUOTES, 'UTF-8');
-            $items .= '                <li><a href="#' . $safeField . '">'
+            $items .= '                    <li><a href="#' . $safeField . '">'
                 . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</a></li>' . "\n";
         }
 
-        return '        <div role="alert">' . "\n"
-            . '            <p>' . $safeSummary . '</p>' . "\n"
-            . '            <ul>' . "\n"
+        return '            <div role="alert" class="notice notice--error">' . "\n"
+            . '                <p>' . $safeSummary . '</p>' . "\n"
+            . '                <ul>' . "\n"
             . $items
-            . '            </ul>' . "\n"
-            . '        </div>' . "\n";
+            . '                </ul>' . "\n"
+            . '            </div>' . "\n";
     }
 
     /**
@@ -295,12 +307,12 @@ final class AcceptInvitationController
         $safeHint = htmlspecialchars(DefaultPasswordPolicy::MESSAGE, ENT_QUOTES, 'UTF-8');
         $describedBy = ' aria-describedby="' . $hintId . ($error === '' ? '' : ' ' . $field . '-error') . '"';
 
-        return '            <div>' . "\n"
-            . '                <label for="' . $field . '">Password</label>' . "\n"
-            . '                <input type="password" id="' . $field . '" name="' . $field . '" autocomplete="new-password" required' . $describedBy . '>' . "\n"
-            . '                <p id="' . $hintId . '">' . $safeHint . '</p>' . "\n"
+        return '                <div class="field-group">' . "\n"
+            . '                    <label for="' . $field . '">Password</label>' . "\n"
+            . '                    <input type="password" id="' . $field . '" name="' . $field . '" autocomplete="new-password" required' . $describedBy . '>' . "\n"
+            . '                    <p id="' . $hintId . '" class="muted">' . $safeHint . '</p>' . "\n"
             . $error
-            . '            </div>' . "\n";
+            . '                </div>' . "\n";
     }
 
     /**
@@ -315,6 +327,6 @@ final class AcceptInvitationController
         $safeField = htmlspecialchars($field, ENT_QUOTES, 'UTF-8');
         $safeMessage = htmlspecialchars($fieldMessages[$field], ENT_QUOTES, 'UTF-8');
 
-        return '                <p id="' . $safeField . '-error">' . $safeMessage . '</p>' . "\n";
+        return '                    <p id="' . $safeField . '-error" class="field-error">' . $safeMessage . '</p>' . "\n";
     }
 }

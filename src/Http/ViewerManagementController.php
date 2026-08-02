@@ -215,7 +215,7 @@ final class ViewerManagementController
         $safeHeading = htmlspecialchars(self::HEADING, ENT_QUOTES, 'UTF-8');
 
         $body = $viewers === []
-            ? '        <p>' . htmlspecialchars(self::NO_VIEWERS_MESSAGE, ENT_QUOTES, 'UTF-8') . '</p>' . "\n"
+            ? '            <p>' . htmlspecialchars(self::NO_VIEWERS_MESSAGE, ENT_QUOTES, 'UTF-8') . '</p>' . "\n"
             : self::renderViewerList($viewers, $csrfToken);
 
         return '<!DOCTYPE html>' . "\n"
@@ -227,11 +227,17 @@ final class ViewerManagementController
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
             . '</head>' . "\n"
             . '<body>' . "\n"
+            . '    <header class="app-header">' . "\n"
+            . '        <div class="app-header__bar">' . "\n"
+            . '            <a class="app-header__back" href="/">Home</a>' . "\n"
+            . '            <h1 class="app-header__title">' . $safeHeading . '</h1>' . "\n"
+            . '        </div>' . "\n"
+            . '    </header>' . "\n"
             . '    <main id="main">' . "\n"
-            . '        <p><a href="/">Home</a></p>' . "\n"
-            . '        <h1>' . $safeHeading . '</h1>' . "\n"
             . self::renderInvitationLink($invitationLink)
+            . '        <div class="card">' . "\n"
             . $body
+            . '        </div>' . "\n"
             . self::renderInviteForm($csrfToken, $errorMessage, $emailValue)
             . '    </main>' . "\n"
             . '</body>' . "\n"
@@ -254,16 +260,22 @@ final class ViewerManagementController
             $controls = '';
             if ($viewer->status !== UserStatus::Revoked) {
                 $safeRevokePath = htmlspecialchars(self::revokePath($viewer->id), ENT_QUOTES, 'UTF-8');
-                $controls = ' <form method="post" action="' . $safeRevokePath . '" style="display:inline">'
-                    . '<input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">'
-                    . '<button type="submit">Revoke</button>'
-                    . '</form>';
+                $controls = '                    <form method="post" action="' . $safeRevokePath . '" class="form-inline">' . "\n"
+                    . '                        <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
+                    . '                        <button type="submit" class="button button--secondary button--small">Revoke</button>' . "\n"
+                    . '                    </form>' . "\n";
             }
 
-            $items .= '                <li>' . $safeEmail . ' - ' . $safeStatus . $controls . '</li>' . "\n";
+            $items .= '                <li class="item-row">' . "\n"
+                . '                    <div class="item-row__main">' . "\n"
+                . '                        <span>' . $safeEmail . '</span>' . "\n"
+                . '                        <span class="badge">' . $safeStatus . '</span>' . "\n"
+                . '                    </div>' . "\n"
+                . $controls
+                . '                </li>' . "\n";
         }
 
-        return '        <ul>' . "\n" . $items . '        </ul>' . "\n";
+        return '            <ul class="item-list">' . "\n" . $items . '            </ul>' . "\n";
     }
 
     private static function renderInvitationLink(?string $invitationLink): string
@@ -274,7 +286,7 @@ final class ViewerManagementController
 
         $safeLink = htmlspecialchars($invitationLink, ENT_QUOTES, 'UTF-8');
 
-        return '        <div role="alert">' . "\n"
+        return '        <div role="alert" class="notice notice--success">' . "\n"
             . '            <p>Invitation created. Share this link with the viewer - it will not be shown again:</p>' . "\n"
             . '            <p><a href="' . $safeLink . '">' . $safeLink . '</a></p>' . "\n"
             . '        </div>' . "\n";
@@ -288,16 +300,18 @@ final class ViewerManagementController
 
         $error = $errorMessage === null
             ? ''
-            : '            <p role="alert">' . htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8') . '</p>' . "\n";
+            : '            <p role="alert" class="notice notice--error">' . htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8') . '</p>' . "\n";
 
-        return '        <form method="post" action="' . htmlspecialchars(self::INVITE_PATH, ENT_QUOTES, 'UTF-8') . '">' . "\n"
+        return '        <div class="card">' . "\n"
+            . '        <form method="post" action="' . htmlspecialchars(self::INVITE_PATH, ENT_QUOTES, 'UTF-8') . '">' . "\n"
             . '            <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
             . $error
-            . '            <div>' . "\n"
+            . '            <div class="field-group">' . "\n"
             . '                <label for="' . self::EMAIL_FIELD . '">Viewer\'s email address</label>' . "\n"
             . '                <input type="email" id="' . self::EMAIL_FIELD . '" name="' . self::EMAIL_FIELD . '" value="' . $safeEmailValue . '" required>' . "\n"
             . '            </div>' . "\n"
-            . '            <button type="submit">Invite viewer</button>' . "\n"
-            . '        </form>' . "\n";
+            . '            <button type="submit" class="button">Invite viewer</button>' . "\n"
+            . '        </form>' . "\n"
+            . '        </div>' . "\n";
     }
 }

@@ -54,7 +54,7 @@ final class FeedbackView
             ? self::renderRecommendation($outcome)
             : self::renderUnavailable($outcome, $retryAction, $retryHiddenFields, $csrfFieldName, $csrfToken);
 
-        return '        <div class="ai-feedback">' . "\n"
+        return '        <div class="ai-feedback card">' . "\n"
             . $body
             . self::renderDisclaimer()
             . '        </div>' . "\n";
@@ -98,7 +98,7 @@ final class FeedbackView
     ): string {
         $safeReason = htmlspecialchars($outcome->reason() ?? FeedbackOutcome::UNAVAILABLE_MESSAGE, ENT_QUOTES, 'UTF-8');
 
-        $html = '            <p>' . $safeReason . '</p>' . "\n";
+        $html = '            <p class="notice">' . $safeReason . '</p>' . "\n";
 
         if ($retryAction !== null) {
             $html .= self::renderRetryForm($retryAction, $retryHiddenFields, $csrfFieldName, $csrfToken);
@@ -127,7 +127,7 @@ final class FeedbackView
         return '            <form method="post" action="' . $safeAction . '">' . "\n"
             . '                <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
             . $hidden
-            . '                <button type="submit">' . $safeLabel . '</button>' . "\n"
+            . '                <button type="submit" class="button">' . $safeLabel . '</button>' . "\n"
             . '            </form>' . "\n";
     }
 }

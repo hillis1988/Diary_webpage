@@ -362,6 +362,54 @@ Registration and authentication already have property tests in place (Properties
     - Cover: successful and failed login (wrong password, locked account), the `next` redirect round trip, successful and failed registration, sign-out clearing the cookie and ending the session, invitation acceptance with a valid/expired/already-used token, and account deletion requiring an owner context
     - **Validates: Requirements 1.1-1.5, 2.1-2.4, 2.6, 7.1, 4.5**
 
+- [x] 21. Close public registration after the owner account exists
+  - This is a single-primary-user application (Requirement 1, Glossary: Primary_User). `/register` being reachable by anyone on the internet was an oversight of task 20.2 — it let a stranger create their own account on this deployment. Since the real owner account has now been created, public registration must be switched off without breaking the still-necessary `/accept-invitation` flow for viewers.
+
+  - [x] 21.1 Add a `registration_enabled` config switch and enforce it in RegistrationController
+    - Add `app.registration_enabled` (bool, default `true` so existing/dev configs keep working) to `config/config.example.php` with documentation, and wire it into `public/index.php` so `RegistrationController` is constructed with the flag
+    - When disabled, `GET /register` and `POST /register` both render a plain "Registration is closed" message instead of the form, doing nothing further; when enabled, behaviour is unchanged from task 20.2
+    - Do not touch `/accept-invitation` — viewer invitation acceptance must keep working regardless of this switch, since that is how the owner grants access to trusted viewers
+    - _Requirements: 1.1 (single Primary_User assumption), 7.5_
+
+  - [x] 21.2 Write unit tests for the registration switch
+    - Cover: disabled config rejects both GET and POST with the closed message and no account created; enabled config behaves exactly as task 20.2's existing tests already assert
+    - **Validates: 7.5**
+
+- [ ] 22. Visual redesign: warm, card-based journal look with mobile-first responsive layout
+  - `public/assets/app.css` already carries the warm, paper-like journal design system (palette, serif headings, card/button/badge/calendar/notice classes, mobile-first breakpoints, dark-mode - task 22.1's scope). `HomePageController` and `CalendarController` already render against those classes (header/shell, nav cards, real month grid with dot indicators). What is still outstanding is that `DiaryEntryController`, `FeedbackView`, `SummaryController`, `MilestoneController`, `ViewerManagementController`, `AccountController`, `StatusPage`, `LoginController`, `RegistrationController` and `AcceptInvitationController` still render plain unstyled `<div>`/`<ul>`/`<dl>` markup that never references a card/field-group/badge/list-row class, and the summary page shows trend metrics as a bare definition list with no visual shape. This task closes that gap and adds a way to see every page rendered before touching the live deployment.
+  - Every page's existing accessible markup, ids, `for`/`aria-describedby` wiring, form `action`s and fixed message text must stay unchanged - restyling and wrapping markup in new elements/classes is fine, but every string a PHPUnit test currently asserts on (headings, labels, field ids, button/link text, exact message text, CSRF field) must still appear afterwards.
+  - Property-based or unit tests are **not** required for this task - the user asked to review the visual result directly rather than add CSS tests. The acceptance bar is "the existing PHPUnit suite stays green", not new coverage.
+
+  - [x] 22.1 Restyle the diary entry page and the shared AI feedback partial
+    - Update `DiaryEntryController` and `FeedbackView`'s rendered markup: add the shared `app-header`/`card`/`main` shell, wrap the form in a `card`, give each question its own `field-group`, style the scale `<select>` controls and free-text `<textarea>` fields, and give the saved-entry confirmation and AI feedback/disclaimer their own card styling
+    - Keep every field id, label text, the CSRF field, the retry form's action/hidden field, and the exact confirmation/disclaimer/unavailable message text unchanged
+    - _Validates: no regression in tests/Unit/Http/DiaryEntryControllerTest.php_
+
+  - [x] 22.2 Add a lightweight trend visualisation to the summary page
+    - Update `SummaryController` to use the shared header/card shell and the `.trend` classes already defined in `app.css` (`.trend__track`, `.trend__fill`, `.trend__mean`, `.badge--direction-*`); using only what `TrendMetrics`/`SeriesStats` already expose (count, mean, min, max, direction) - no repository or backend change - render a min-max range bar for mood and sleep with the mean marked, plus a coloured badge for Improving/Declining/Stable
+    - Keep the narrative paragraph, entries-considered count, and insufficient-data/unavailable message text unchanged; wrap the outcome in a card
+    - _Validates: no regression in tests/Unit/Http/SummaryControllerTest.php_
+
+  - [x] 22.3 Restyle the milestones and viewer management list pages
+    - `MilestoneController`: add the shared header/card shell; style each milestone as an `item-row` with a `badge--category-*` (medication/relationship/lifestyle/other each visually distinct); keep the edit/delete controls and their exact form actions
+    - `ViewerManagementController`: add the shared header/card shell; style the viewer list as `item-row`s and the invite form as a card; keep the invitation-link display, revoke control and their exact text
+    - _Validates: no regression in tests/Unit/Http/MilestoneControllerTest.php and ViewerManagementControllerTest.php_
+
+  - [x] 22.4 Apply the shared header/shell and card styling to the remaining simple pages
+    - Update `LoginController`, `RegistrationController`, `AcceptInvitationController`, `AccountController` and `StatusPage`'s rendered markup to use the header/shell and card classes already in `app.css`, without changing any id, `for`, `name`, `action`, button label or fixed message text a current test asserts on
+    - _Validates: no regression in the Unit/Http tests for these controllers_
+
+  - [ ] 22.5 Build a static, database-free preview generator (tools/preview/generate.php)
+    - A standalone script that calls each controller's existing static render()/renderXxx() method with hand-built sample data (mirroring the fixtures already used in tests/Unit/Http/*) and writes the resulting HTML to public/preview/*.html: home, diary entry (blank, and with a saved entry plus a recommendation), summary (with metrics, insufficient-data, and unavailable outcomes), calendar (with entries and milestones), milestones list, viewers list, login, register, accept-invitation and the account deletion confirmation
+    - No database, no session and no HTTP routing involved - pure static HTML generation from already-existing render methods, so it exercises no new production code path
+    - Add `public/preview/` to `.gitignore`
+    - No PHPUnit tests for this script; it is a dev-only visualisation aid. Confirm success by running the script and checking it exits without a PHP error/warning for every page it generates, then serve `public/` with `php -S` so the pages can be viewed in a browser with `/assets/app.css` resolving correctly.
+
+  - [ ] 22.6 Mobile responsiveness check and full regression run
+    - Verify every page reflows without horizontal scroll from 320px up: stacked header nav, single-column cards, a shrinking calendar grid, labels stacked above inputs
+    - Run the full PHPUnit suite (`vendor/bin/phpunit`) and confirm it is green; fix any regression by adjusting markup, not by weakening an assertion that checks a fixed requirement
+    - _No new tests are added by this subtask - it is a verification pass over 22.1-22.5._
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -399,7 +447,9 @@ Registration and authentication already have property tests in place (Properties
     { "id": 19, "tasks": ["16.4", "18.2", "18.3"] },
     { "id": 20, "tasks": ["20.1", "20.2", "20.3", "20.4", "20.5"] },
     { "id": 21, "tasks": ["20.6"] },
-    { "id": 22, "tasks": ["20.7"] }
+    { "id": 22, "tasks": ["20.7"] },
+    { "id": 23, "tasks": ["21.1"] },
+    { "id": 24, "tasks": ["21.2"] }
   ]
 }
 ```
