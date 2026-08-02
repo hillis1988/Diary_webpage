@@ -21,6 +21,8 @@ use Diary\Diary\CalendarService;
 use Diary\Diary\DiaryEntryRepository;
 use Diary\Diary\DiaryInputValidator;
 use Diary\Diary\DiaryService;
+use Diary\Http\AcceptInvitationController;
+use Diary\Http\AccountController;
 use Diary\Http\AuthorisationMiddleware;
 use Diary\Http\CalendarController;
 use Diary\Http\CronAuth;
@@ -30,8 +32,11 @@ use Diary\Http\CsrfMiddleware;
 use Diary\Http\DiaryEntryController;
 use Diary\Http\HomePageController;
 use Diary\Http\HttpsRedirectMiddleware;
+use Diary\Http\LoginController;
+use Diary\Http\LogoutController;
 use Diary\Http\MilestoneController;
 use Diary\Http\Pipeline;
+use Diary\Http\RegistrationController;
 use Diary\Http\Request;
 use Diary\Http\Router;
 use Diary\Http\SecurityHeadersMiddleware;
@@ -181,8 +186,23 @@ $aiFeedbackService = new AiFeedbackService(
 $router = new Router();
 
 // Routes are registered here as controllers arrive.
-$homePage = new HomePageController($accessControl);
+$homePage = new HomePageController($accessControl, $csrfGuard);
 $router->get('/', static fn (Request $r, array $params) => $homePage->show($r));
+
+$loginPage = new LoginController($accessControl, $authService, $csrfGuard, $clock);
+$router->get(AccessControlService::LOGIN_PATH, static fn (Request $r, array $params) => $loginPage->show($r));
+$router->post(AccessControlService::LOGIN_PATH, static fn (Request $r, array $params) => $loginPage->submit($r));
+
+$registrationPage = new RegistrationController($accessControl, $authService, $csrfGuard, $clock);
+$router->get(AccessControlService::REGISTER_PATH, static fn (Request $r, array $params) => $registrationPage->show($r));
+$router->post(AccessControlService::REGISTER_PATH, static fn (Request $r, array $params) => $registrationPage->submit($r));
+
+$logoutRoute = new LogoutController($accessControl, $authService, $clock);
+$router->post(AccessControlService::LOGOUT_PATH, static fn (Request $r, array $params) => $logoutRoute->signOut($r));
+
+$acceptInvitationPage = new AcceptInvitationController($accessControl, $authService, $userRepository, $csrfGuard, $clock);
+$router->get(AccessControlService::ACCEPT_INVITATION_PATH, static fn (Request $r, array $params) => $acceptInvitationPage->show($r));
+$router->post(AccessControlService::ACCEPT_INVITATION_PATH, static fn (Request $r, array $params) => $acceptInvitationPage->submit($r));
 
 $diaryEntryPage = new DiaryEntryController(
     $accessControl,
@@ -222,6 +242,16 @@ $viewerManagementPages = new ViewerManagementController(
 $router->get(AccessControlService::VIEWERS_PATH, static fn (Request $r, array $params) => $viewerManagementPages->list($r));
 $router->post(ViewerManagementController::INVITE_PATH, static fn (Request $r, array $params) => $viewerManagementPages->invite($r));
 $router->post(AccessControlService::VIEWERS_PATH . '/{id}/revoke', static fn (Request $r, array $params) => $viewerManagementPages->revoke($r, $params));
+
+$accountPage = new AccountController(
+    $accessControl,
+    new PurgeService($pdo, new PurgeJobRepository($pdo), $clock),
+    $authService,
+    $csrfGuard,
+    $clock,
+);
+$router->get(AccessControlService::ACCOUNT_DELETE_PATH, static fn (Request $r, array $params) => $accountPage->showConfirmation($r));
+$router->post(AccessControlService::ACCOUNT_DELETE_PATH, static fn (Request $r, array $params) => $accountPage->delete($r));
 
 $cbtRecommendationRepository = new CbtRecommendationRepository($pdo, $payloadCodec);
 $calendarService = new CalendarService($diaryEntryRepository, $milestoneRepository);

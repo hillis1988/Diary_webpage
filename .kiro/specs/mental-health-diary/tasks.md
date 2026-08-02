@@ -324,6 +324,44 @@ Registration and authentication already have property tests in place (Properties
 - [x] 19. Final checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
+- [x] 20. Authentication and account HTTP pages
+  - Requirements 1 (registration), 2 (authentication/sessions) and 7.1 (invitation acceptance) were implemented at the `Auth_Service` layer only; no controller ever exposed them as reachable pages. This closes that gap so the deployed site is actually usable end to end.
+
+  - [x] 20.1 Implement LoginController
+    - `GET /login`: render an email/password form with a CSRF token, preserving the `next` query parameter (see `AuthPaths::RETURN_PARAM`) as a hidden field so a successful sign-in redirects back to where the caller was heading
+    - `POST /login`: call `AuthService::authenticate`; on success set the session cookie via `SessionCookie::header()` and redirect to the sanitised `next` path or `/`; on failure redisplay the form with the incorrect-credentials or account-locked message, without leaking which case applied beyond the existing `AuthService` wording
+    - Authorise both verbs as `OperationKind::ViewAuthPage` so the page matches `AuthPaths`/the permission matrix already in place
+    - _Requirements: 2.1, 2.2, 2.3, 2.6_
+
+  - [x] 20.2 Implement RegistrationController
+    - `GET /register`: render an email/password form with a CSRF token and the password policy description (`DefaultPasswordPolicy::MESSAGE`)
+    - `POST /register`: call `AuthService::register`; on success, sign the new owner in immediately (start a session the same way `AuthService::authenticate` does, or redirect to `/login` with a confirmation) and redirect to `/`; on failure redisplay the form with the field message (already-registered or policy) and the submitted email preserved
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
+
+  - [x] 20.3 Implement sign-out route
+    - `POST /logout`: authorised for any authenticated context; call `AuthService::signOut` with the current session id, clear the cookie with `SessionCookie::clearingHeader()`, redirect to `/login`
+    - Add a sign-out control to the home page navigation (`HomePageController`/`AccessControlService::navigationFor`) for any authenticated context, owner or viewer
+    - _Requirements: 2.4_
+
+  - [x] 20.4 Implement AcceptInvitationController
+    - `GET /accept-invitation?token=...`: render a set-password form carrying the token, using the password policy description; an invalid or missing token shows the invitation-invalid message rather than a form
+    - `POST /accept-invitation`: call `AuthService::acceptViewerInvitation`; on success sign the viewer in and redirect to `/`; on failure redisplay with the invitation-invalid or policy message
+    - Route is public (add to `AuthPaths`/the permission matrix alongside `/login` and `/register`) since the caller has no session yet
+    - _Requirements: 7.1_
+
+  - [x] 20.5 Implement account deletion control
+    - A small owner-only page or section (e.g. under `/account`) with a confirmation step and a CSRF-protected form that calls `PurgeService::requestDeletion` for the signed-in owner, then signs out and redirects to `/login` with a confirmation message
+    - Restrict to an owner context (`OperationKind::ManageAccess`), matching `Operation::deleteAccount()`
+    - _Requirements: 4.5_
+
+  - [x] 20.6 Wire the new routes into the front controller
+    - Register `/login`, `/register`, `/logout`, `/accept-invitation`, `/account/delete` on the router in `public/index.php`, constructing each controller with its existing dependencies (`AuthService`, `CsrfGuard`, `AccessControlService`, `PurgeService` — all already assembled in `index.php`)
+    - _Requirements: 2.6_
+
+  - [x] 20.7 Write unit tests for the new controllers
+    - Cover: successful and failed login (wrong password, locked account), the `next` redirect round trip, successful and failed registration, sign-out clearing the cookie and ending the session, invitation acceptance with a valid/expired/already-used token, and account deletion requiring an owner context
+    - **Validates: Requirements 1.1-1.5, 2.1-2.4, 2.6, 7.1, 4.5**
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -358,7 +396,10 @@ Registration and authentication already have property tests in place (Properties
     { "id": 16, "tasks": ["14.4", "14.5", "14.6", "15.1"] },
     { "id": 17, "tasks": ["14.7", "15.2", "15.4", "16.1"] },
     { "id": 18, "tasks": ["15.3", "16.2", "16.3", "18.1"] },
-    { "id": 19, "tasks": ["16.4", "18.2", "18.3"] }
+    { "id": 19, "tasks": ["16.4", "18.2", "18.3"] },
+    { "id": 20, "tasks": ["20.1", "20.2", "20.3", "20.4", "20.5"] },
+    { "id": 21, "tasks": ["20.6"] },
+    { "id": 22, "tasks": ["20.7"] }
   ]
 }
 ```

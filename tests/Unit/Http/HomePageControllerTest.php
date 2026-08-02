@@ -11,6 +11,7 @@ use Diary\Auth\Session;
 use Diary\Auth\SessionId;
 use Diary\Auth\UserId;
 use Diary\Auth\UserRole;
+use Diary\Http\CsrfGuard;
 use Diary\Http\HomePageController;
 use Diary\Http\Request;
 use Diary\Http\SessionResolverMiddleware;
@@ -54,7 +55,7 @@ final class HomePageControllerTest extends TestCase
     {
         $clock = FixedClock::at('2024-03-01 09:00:00');
         $access = new AccessControlService($clock);
-        $controller = new HomePageController($access);
+        $controller = new HomePageController($access, new CsrfGuard(str_repeat('k', 32), $clock));
 
         $userId = UserId::fromString(Ulid::generate($clock));
         $session = new Session(
@@ -76,14 +77,40 @@ final class HomePageControllerTest extends TestCase
         self::assertStringContainsString('Milestones', $response->body());
     }
 
-    public function testShowWithNoResolvedContextRendersNoNavigation(): void
+    public function testShowRendersASignOutFormForAnAuthenticatedContext(): void
     {
         $clock = FixedClock::at('2024-03-01 09:00:00');
-        $controller = new HomePageController(new AccessControlService($clock));
+        $access = new AccessControlService($clock);
+        $controller = new HomePageController($access, new CsrfGuard(str_repeat('k', 32), $clock));
+
+        $userId = UserId::fromString(Ulid::generate($clock));
+        $session = new Session(
+            id: SessionId::fromString(str_repeat('b', 64)),
+            userId: $userId,
+            contextRole: UserRole::Viewer,
+            dataOwnerId: $userId,
+            createdAt: $clock->now(),
+            lastActivityAt: $clock->now(),
+        );
+
+        $request = Request::of('GET', '/')
+            ->withAttribute(SessionResolverMiddleware::CONTEXT_ATTRIBUTE, SecurityContext::forSession($session));
+
+        $response = $controller->show($request);
+
+        self::assertStringContainsString('action="' . AccessControlService::LOGOUT_PATH . '"', $response->body());
+        self::assertStringContainsString(HomePageController::SIGN_OUT_LABEL, $response->body());
+    }
+
+    public function testShowWithNoResolvedContextRendersNoNavigationOrSignOutForm(): void
+    {
+        $clock = FixedClock::at('2024-03-01 09:00:00');
+        $controller = new HomePageController(new AccessControlService($clock), new CsrfGuard(str_repeat('k', 32), $clock));
 
         $response = $controller->show(Request::of('GET', '/'));
 
         self::assertSame(200, $response->status());
         self::assertStringNotContainsString('Diary entry', $response->body());
+        self::assertStringNotContainsString('<form', $response->body());
     }
 }

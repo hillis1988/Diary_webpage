@@ -43,6 +43,11 @@ final class Operation implements Stringable
         return self::of(OperationKind::ViewAuthPage, 'auth.view_register', $requestedPath);
     }
 
+    public static function viewAcceptInvitation(?string $requestedPath = null): self
+    {
+        return self::of(OperationKind::ViewAuthPage, 'auth.view_accept_invitation', $requestedPath);
+    }
+
     public static function readDiaryData(string $action, ?string $requestedPath = null): self
     {
         return self::of(OperationKind::ReadDiaryData, $action, $requestedPath);
@@ -91,6 +96,23 @@ final class Operation implements Stringable
     public static function deleteAccount(?string $requestedPath = null): self
     {
         return self::of(OperationKind::ManageAccess, 'account.delete', $requestedPath);
+    }
+
+    /**
+     * Signing out (Requirement 2.4). Deliberately {@see OperationKind::ReadDiaryData}
+     * rather than one of the mutating kinds: the matrix cell that operation needs -
+     * redirect an anonymous caller, allow a viewer, allow an owner - is exactly what
+     * `ReadDiaryData` already gives every context (see {@see \Diary\Access\PermissionMatrix}),
+     * and unlike this, every mutating kind denies a viewer, which would block a
+     * Viewer from signing out (Requirement 2.4 draws no such distinction between
+     * roles). It also carries no risk of a mislabelled audit row: that cell of the
+     * matrix never produces a `Deny`, so {@see \Diary\Access\AccessControlService}'s
+     * denial-logging path - the only place an operation kind is turned into an audit
+     * `target_type` - is never reached for a sign-out.
+     */
+    public static function signOut(?string $requestedPath = null): self
+    {
+        return self::of(OperationKind::ReadDiaryData, 'auth.sign_out', $requestedPath);
     }
 
     public function kind(): OperationKind

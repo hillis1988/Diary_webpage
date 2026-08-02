@@ -11,9 +11,9 @@ use LogicException;
 /**
  * The permission matrix, as one declarative table and nothing else.
  *
- * | Operation kind        | anonymous | viewer context | owner context |
- * | --------------------- | --------- | -------------- | ------------- |
- * | View login / register | allow     | allow          | allow         |
+ * | Operation kind          | anonymous | viewer context | owner context |
+ * | ----------------------- | --------- | -------------- | ------------- |
+ * | View auth page          | allow     | allow          | allow         |
  * | Read diary data       | redirect  | allow          | allow         |
  * | Write Diary_Entry     | redirect  | **deny**       | allow         |
  * | Write Milestone       | redirect  | **deny**       | allow         |
@@ -77,7 +77,7 @@ final class PermissionMatrix
     {
         return self::$table ??= [
             OperationKind::ViewAuthPage->value => [
-                // Requirement 2.6: the two pages an unauthenticated caller must reach.
+                // Requirements 2.6, 7.1: the pages an unauthenticated caller must reach.
                 ContextRole::Anonymous->value => Verdict::Allow,
                 ContextRole::Viewer->value => Verdict::Allow,
                 ContextRole::Owner->value => Verdict::Allow,

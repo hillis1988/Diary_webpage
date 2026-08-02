@@ -78,10 +78,32 @@ final class AccessControlService
     public const VIEWERS_PATH = '/viewers';
 
     /**
-     * Where an invitation link (task 15.4) points; there is no controller for it
-     * yet, only the constant every caller building or testing that link shares.
+     * Where an invitation link (task 15.4) points, and where
+     * {@see \Diary\Http\AcceptInvitationController} is reached from
+     * (Requirement 7.1). Public, like {@see LOGIN_PATH} and {@see REGISTER_PATH}:
+     * the caller following this link holds no session yet.
      */
-    public const ACCEPT_INVITATION_PATH = '/accept-invitation';
+    public const ACCEPT_INVITATION_PATH = AuthPaths::ACCEPT_INVITATION;
+
+    /**
+     * Owner-only (Requirement 4.5), like {@see VIEWERS_PATH}: the account
+     * deletion confirmation page and its delete action, both rendered by
+     * {@see \Diary\Http\AccountController} on this one path - the GET shows the
+     * confirmation form, the POST performs the deletion, the same split
+     * {@see \Diary\Http\LoginController} uses for `/login`. Stated here so the
+     * eventual home page link (a later task) and the controller agree on where
+     * it points, the same way the four {@see navigationFor()} destinations do.
+     */
+    public const ACCOUNT_DELETE_PATH = '/account/delete';
+
+    /**
+     * Where the sign-out control posts to (Requirement 2.4). Stated here so
+     * {@see \Diary\Http\LogoutController} and the sign-out control this class's
+     * {@see navigationFor()} renders cannot disagree about the destination -
+     * the same reason every other path a controller and a link both need to
+     * agree on is a constant on this class rather than a literal in each.
+     */
+    public const LOGOUT_PATH = '/logout';
 
     /**
      * @param AuditLogRepository|null $auditLog when absent, denials are still
