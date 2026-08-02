@@ -99,6 +99,7 @@ try {
         new NavigationItem('Calendar', '/calendar'),
         new NavigationItem('Summary', '/summary'),
         new NavigationItem('Milestones', '/milestones'),
+        new NavigationItem('Viewers', '/viewers'),
     ];
     $viewerNavigation = [
         new NavigationItem('Calendar', '/calendar'),
@@ -198,7 +199,19 @@ try {
     $calendarDetailMethod->setAccessible(true);
 
     $selectedDate = LocalDate::of(2025, 6, 1);
-    $detail = $calendarDetailMethod->invoke(null, [$savedEntry, null], $selectedDate);
+    $calendarRecommendation = \Diary\Ai\CbtRecommendationRecord::generated(
+        'preview-recommendation-id',
+        $savedEntry->id(),
+        new CbtRecommendation(
+            'You made time for connection and movement today - both support mood.',
+            'Tomorrow, try writing down one thing you are looking forward to.',
+        ),
+        'preview-provider',
+        'preview-model',
+        1,
+        new DateTimeImmutable('2025-06-01 20:00:00'),
+    );
+    $detail = $calendarDetailMethod->invoke(null, [$savedEntry, $calendarRecommendation], $selectedDate);
     $calendarHtml = $calendarRenderMethod->invoke(null, $calendarMonth, $selectedDate, $detail);
     $write('calendar.html', $calendarHtml);
 
