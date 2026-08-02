@@ -62,10 +62,14 @@ final class PurgeService
     {
         $now = $clock->now();
 
+        // Two distinct placeholders for the same value: a native prepared
+        // statement (EMULATE_PREPARES off, as ConnectionFactory configures for
+        // MariaDB) rejects a named placeholder bound twice in one statement.
         $statement = $this->pdo->prepare(
-            'UPDATE users SET deletion_requested_at = :now, updated_at = :now WHERE id = :id'
+            'UPDATE users SET deletion_requested_at = :now, updated_at = :now_again WHERE id = :id'
         );
         $statement->bindValue(':now', SqlTimestamp::format($now));
+        $statement->bindValue(':now_again', SqlTimestamp::format($now));
         $statement->bindValue(':id', $userId->toString());
         $statement->execute();
 

@@ -204,7 +204,7 @@ Registration and authentication already have property tests in place (Properties
     - Single view partial used by every AI surface; render the recommendation, or the "feedback is temporarily unavailable" notice plus retry control on failure
     - _Requirements: 6.5, 6.6_
 
-- [-] 11. Checkpoint - diary and feedback loop
+- [x] 11. Checkpoint - diary and feedback loop
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 12. Significant milestones
@@ -267,7 +267,7 @@ Registration and authentication already have property tests in place (Properties
     - Assert the shared disclaimer partial renders on the entry feedback view and the summary page, in every outcome branch of each
     - **Validates: Requirements 6.6, 9.6**
 
-- [ ] 15. Read-only viewer accounts
+- [x] 15. Read-only viewer accounts
   - [x] 15.1 Implement viewer creation and revocation
     - `createViewer` from an owner context creates a `viewer` account with `data_owner_id` set to the Primary_User and `status = 'invited'`, issuing a single-use invitation token; the viewer sets a password satisfying the same policy, moving them to `active`
     - `revokeViewer` sets `status = 'revoked'` and terminates that viewer's live sessions immediately, blocking further reads and re-authentication
@@ -278,50 +278,50 @@ Registration and authentication already have property tests in place (Properties
     - Cover invite -> set password -> active, and active -> revoke -> blocked from further reads and re-authentication; assert each step is recorded in `audit_log`
     - **Validates: Requirements 7.1, 7.4**
 
-  - [~] 15.3 Write property test for owner-scoped reads
+  - [x] 15.3 Write property test for owner-scoped reads
     - **Property 2: Reads are scoped to the session's data owner**
     - **Validates: Requirements 4.4, 7.2, 8.5**
 
-  - [-] 15.4 Implement viewer management page
+  - [x] 15.4 Implement viewer management page
     - Owner-only page listing viewers with their status, invite form and revoke control
     - _Requirements: 7.1, 7.4, 7.5_
 
-- [ ] 16. Account deletion and cron endpoints
+- [x] 16. Account deletion and cron endpoints
   - [x] 16.1 Implement PurgeService
     - `requestDeletion` sets `deletion_requested_at`, records a `purge_jobs` row, and purges immediately in one transaction: recommendations, entries, milestones, linked viewer accounts, sessions, then the user row
     - Strip audit rows of references to deleted content; leave the `purge_jobs` row on failure; `runPurgeSlice` retries outstanding jobs idempotently within a bounded limit
     - _Requirements: 4.5_
 
-  - [~] 16.2 Write unit tests for account deletion
+  - [x] 16.2 Write unit tests for account deletion
     - Assert a purge removes every recommendation, entry, milestone, linked viewer account and session for the owner, strips audit rows of references to the deleted content, and a failed step leaves a `purge_jobs` row for the daily cron to retry
     - **Validates: Requirements 4.5**
 
-  - [~] 16.3 Implement cron endpoints
+  - [x] 16.3 Implement cron endpoints
     - `/cron/purge` (daily), `/cron/sessions` (hourly), `/cron/keys` (on demand), each requiring a shared secret compared in constant time, idempotent, and self-limiting well inside 60 seconds
     - `/cron/keys` re-encrypts a slice of rows onto the current DEK and retires superseded keys only when unreferenced
     - _Requirements: 4.2, 4.5_
 
-  - [~] 16.4 Write integration tests for cron endpoints
+  - [x] 16.4 Write integration tests for cron endpoints
     - Reject missing or wrong tokens, verify idempotence and bounded work per run
     - _Requirements: 4.2, 4.5_
 
-- [~] 17. Checkpoint - full feature set
+- [x] 17. Checkpoint - full feature set
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 18. Deployment hardening and message coverage
-  - [~] 18.1 Add deployment artefacts and the transport smoke check script
+- [x] 18. Deployment hardening and message coverage
+  - [x] 18.1 Add deployment artefacts and the transport smoke check script
     - `.htaccess` for the `public/` document root (HTTPS redirect, deny access to dotfiles), documented restrictive permissions for `config/config.php`, and a script asserting TLS 1.2+ negotiation, HSTS, security headers and the HTTP-to-HTTPS redirect against a target host
     - _Requirements: 4.3_
 
-  - [~] 18.2 Write unit tests for fixed content and error catalogue wording
+  - [x] 18.2 Write unit tests for fixed content and error catalogue wording
     - Home page banner text, the structured question set, prompt construction snapshots proving no identifiers are included, and the exact wording of every user-facing message in the error catalogue
     - _Requirements: 3.1, 5.1, 1.2, 1.3, 2.2, 2.3, 2.5, 3.3, 5.5, 6.5, 9.4, 9.5, 10.4_
 
-  - [~] 18.3 Write end-to-end integration journeys with a stubbed provider
+  - [x] 18.3 Write end-to-end integration journeys with a stubbed provider
     - Register, sign in, submit an entry, view feedback, add a milestone, browse the calendar, generate a summary, invite and revoke a viewer, delete the account; assert the unique index prevents duplicate entries under concurrent submission
     - _Requirements: 1.1, 2.1, 5.3, 5.4, 6.1, 8.1, 9.1, 7.1, 7.4, 4.5_
 
-- [~] 19. Final checkpoint
+- [x] 19. Final checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

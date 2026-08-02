@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Diary\Access\AccessControlService;
+use Diary\Access\ViewerAccessService;
 use Diary\Ai\AiConfig;
 use Diary\Ai\AiFeedbackService;
 use Diary\Ai\AiSummaryService;
@@ -22,6 +23,8 @@ use Diary\Diary\DiaryInputValidator;
 use Diary\Diary\DiaryService;
 use Diary\Http\AuthorisationMiddleware;
 use Diary\Http\CalendarController;
+use Diary\Http\CronAuth;
+use Diary\Http\CronController;
 use Diary\Http\CsrfGuard;
 use Diary\Http\CsrfMiddleware;
 use Diary\Http\DiaryEntryController;
@@ -34,13 +37,17 @@ use Diary\Http\Router;
 use Diary\Http\SecurityHeadersMiddleware;
 use Diary\Http\SessionResolverMiddleware;
 use Diary\Http\SummaryController;
+use Diary\Http\ViewerManagementController;
 use Diary\Milestone\MilestoneInputValidator;
 use Diary\Milestone\MilestoneRepository;
 use Diary\Milestone\MilestoneService;
 use Diary\Storage\ConnectionFactory;
 use Diary\Storage\Crypto;
 use Diary\Storage\KeyRing;
+use Diary\Storage\KeyRotationService;
 use Diary\Storage\PayloadCodec;
+use Diary\Storage\PurgeJobRepository;
+use Diary\Storage\PurgeService;
 use Diary\Storage\StorageException;
 use Diary\Support\SystemClock;
 
@@ -135,11 +142,14 @@ try {
     $diaryFail('Please try again shortly.');
 }
 
+$userRepository = new UserRepository($pdo);
+$sessionRepository = new SessionRepository($pdo);
+
 $authService = new AuthService(
-    users: new UserRepository($pdo),
+    users: $userRepository,
     passwordPolicy: new DefaultPasswordPolicy(),
     clock: $clock,
-    sessions: new SessionRepository($pdo),
+    sessions: $sessionRepository,
     auditLog: new AuditLogRepository($pdo),
     // Derived from the master key with its own HKDF label, as the CSRF secret is: the
     // audit trail's address hashes need a key, not a second value to deploy and lose.
@@ -202,6 +212,17 @@ $router->get(AccessControlService::MILESTONES_PATH . '/{id}/edit', static fn (Re
 $router->post(AccessControlService::MILESTONES_PATH . '/{id}/edit', static fn (Request $r, array $params) => $milestonePages->submitEdit($r, $params));
 $router->post(AccessControlService::MILESTONES_PATH . '/{id}/delete', static fn (Request $r, array $params) => $milestonePages->delete($r, $params));
 
+$viewerAccessService = new ViewerAccessService($userRepository, $sessionRepository, new AuditLogRepository($pdo));
+$viewerManagementPages = new ViewerManagementController(
+    $accessControl,
+    $viewerAccessService,
+    $csrfGuard,
+    $clock,
+);
+$router->get(AccessControlService::VIEWERS_PATH, static fn (Request $r, array $params) => $viewerManagementPages->list($r));
+$router->post(ViewerManagementController::INVITE_PATH, static fn (Request $r, array $params) => $viewerManagementPages->invite($r));
+$router->post(AccessControlService::VIEWERS_PATH . '/{id}/revoke', static fn (Request $r, array $params) => $viewerManagementPages->revoke($r, $params));
+
 $cbtRecommendationRepository = new CbtRecommendationRepository($pdo, $payloadCodec);
 $calendarService = new CalendarService($diaryEntryRepository, $milestoneRepository);
 $calendarPage = new CalendarController(
@@ -221,6 +242,26 @@ $aiSummaryService = new AiSummaryService(
 $summaryPage = new SummaryController($accessControl, $aiSummaryService, $clock);
 $router->get(AccessControlService::SUMMARY_PATH, static fn (Request $r, array $params) => $summaryPage->show($r));
 
+// Cron endpoints (Requirements 4.2, 4.5): token-authenticated URL calls from the
+// IONOS cron manager, never a browser session. They are registered on the same
+// router so path matching (404/405) stays in one place, but they are dispatched
+// through $cronPipeline below rather than $pipeline: a cron call carries no
+// session cookie, so running it through session resolution and authorisation
+// would only ever resolve anonymous and redirect to /login, which is not a
+// meaningful response for a cron manager. CronController::isAuthorised() is
+// this route's own authorisation check instead.
+$cronToken = is_string($config['cron']['token'] ?? null) ? $config['cron']['token'] : '';
+$cronController = new CronController(
+    new CronAuth($cronToken),
+    new PurgeService($pdo, new PurgeJobRepository($pdo), $clock),
+    $sessionRepository,
+    new KeyRotationService($pdo, $keyRing, $payloadCodec),
+    $clock,
+);
+$router->get('/cron/purge', static fn (Request $r, array $params) => $cronController->purge($r));
+$router->get('/cron/sessions', static fn (Request $r, array $params) => $cronController->sessions($r));
+$router->get('/cron/keys', static fn (Request $r, array $params) => $cronController->keys($r));
+
 $pipeline = Pipeline::fixedOrder(
     new HttpsRedirectMiddleware($baseUrl, $forceHttps),
     new SecurityHeadersMiddleware(),
@@ -230,4 +271,20 @@ $pipeline = Pipeline::fixedOrder(
     $router,
 );
 
-$pipeline->handle($request)->send();
+// The cron pipeline keeps the two stages every response still needs - HTTPS
+// enforcement and the security headers - but skips CSRF (no browser form is
+// involved), session resolution and authorisation (token-based instead, done
+// inside CronController). Routes not starting with /cron/ never reach this
+// pipeline; see the dispatch below.
+$cronPipeline = Pipeline::fixedOrder(
+    new HttpsRedirectMiddleware($baseUrl, $forceHttps),
+    new SecurityHeadersMiddleware(),
+    new CsrfMiddleware($csrfGuard),
+    null,
+    null,
+    $router,
+);
+
+$isCronPath = str_starts_with($request->path, '/cron/');
+
+($isCronPath ? $cronPipeline : $pipeline)->handle($request)->send();

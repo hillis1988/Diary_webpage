@@ -205,9 +205,13 @@ final class UserRepository
      */
     public function revokeViewer(UserId $viewerId, UserId $ownerId, DateTimeImmutable $now): bool
     {
+        // Two distinct placeholders for the same value ('revoked' set in the
+        // SET clause, checked against in the WHERE clause): a native prepared
+        // statement (EMULATE_PREPARES off, as ConnectionFactory configures for
+        // MariaDB) rejects a named placeholder bound twice in one statement.
         $statement = $this->pdo->prepare(
             'UPDATE users SET status = :revoked, updated_at = :updated_at '
-            . 'WHERE id = :id AND data_owner_id = :owner_id AND role = :role AND status != :revoked'
+            . 'WHERE id = :id AND data_owner_id = :owner_id AND role = :role AND status != :current_revoked'
         );
 
         $statement->execute([
@@ -216,6 +220,7 @@ final class UserRepository
             ':id' => $viewerId->toString(),
             ':owner_id' => $ownerId->toString(),
             ':role' => UserRole::Viewer->value,
+            ':current_revoked' => UserStatus::Revoked->value,
         ]);
 
         return $statement->rowCount() > 0;

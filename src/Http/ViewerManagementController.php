@@ -13,6 +13,7 @@ use Diary\Auth\UserId;
 use Diary\Auth\UserStatus;
 use Diary\Support\Clock;
 use Diary\Support\Operation;
+use Diary\Support\OperationKind;
 use InvalidArgumentException;
 
 /**
@@ -198,11 +199,7 @@ final class ViewerManagementController
 
     private static function listOperation(Request $request): Operation
     {
-        return Operation::of(
-            \Diary\Support\OperationKind::ManageAccess,
-            'viewer.list',
-            $request->pathWithQuery(),
-        );
+        return Operation::of(OperationKind::ManageAccess, 'viewer.list', $request->pathWithQuery());
     }
 
     /**

@@ -120,6 +120,60 @@ final class SessionRepository
     }
 
     /**
+     * Delete sessions that are no longer of any use: terminated (signed out,
+     * revoked, or password-changed) or idle, either way before `$before`
+     * (Requirement 4.2's `/cron/sessions` row - "delete sessions terminated
+     * or idle beyond retention").
+     *
+     * This is separate from the 30-minute idle *timeout* Requirement 2.5
+     * enforces at resolution time: that already makes an idle session fail
+     * to resolve long before this runs. This is bounded housekeeping so the
+     * table itself does not grow forever with rows nobody can use any more.
+     * Bounded by `$limit` so a cron run stays well inside the 60-second cap;
+     * idempotent, since re-running matches only the rows still meeting the
+     * same cutoff.
+     *
+     * @return int how many rows were deleted
+     */
+    public function deleteExpired(DateTimeImmutable $before, int $limit): int
+    {
+        $limit = max(0, $limit);
+
+        if ($limit === 0) {
+            return 0;
+        }
+
+        $cutoff = SqlTimestamp::format($before);
+
+        // Deletes cannot take a LIMIT with a WHERE this shape on every driver
+        // (SQLite in the unit suite does not support LIMIT on DELETE at all),
+        // so the candidate ids are selected first and deleted by id, which
+        // works identically on MariaDB and SQLite.
+        $select = $this->pdo->prepare(
+            'SELECT id FROM sessions
+             WHERE (terminated_at IS NOT NULL AND terminated_at < :cutoff_terminated)
+                OR (terminated_at IS NULL AND last_activity_at < :cutoff_idle)
+             LIMIT :limit'
+        );
+        $select->bindValue(':cutoff_terminated', $cutoff);
+        $select->bindValue(':cutoff_idle', $cutoff);
+        $select->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $select->execute();
+
+        $ids = array_column($select->fetchAll(PDO::FETCH_ASSOC), 'id');
+
+        if ($ids === []) {
+            return 0;
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($ids), '?'));
+        $delete = $this->pdo->prepare("DELETE FROM sessions WHERE id IN ($placeholders)");
+        $delete->execute($ids);
+
+        return $delete->rowCount();
+    }
+
+    /**
      * @param array<string, mixed> $row
      */
     public static function hydrate(array $row): Session

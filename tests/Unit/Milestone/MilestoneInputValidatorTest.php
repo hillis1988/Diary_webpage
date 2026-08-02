@@ -54,6 +54,10 @@ final class MilestoneInputValidatorTest extends TestCase
 
         self::assertTrue($validation->isRejected());
         self::assertTrue($validation->namesField(MilestoneSubmission::DESCRIPTION_FIELD));
+        self::assertSame(
+            MilestoneInputValidator::DESCRIPTION_MESSAGE,
+            $validation->fieldMessage(MilestoneSubmission::DESCRIPTION_FIELD)
+        );
 
         $this->expectException(LogicException::class);
         $validation->input();
@@ -70,6 +74,10 @@ final class MilestoneInputValidatorTest extends TestCase
 
         self::assertTrue($validation->isRejected());
         self::assertTrue($validation->namesField(MilestoneSubmission::DESCRIPTION_FIELD));
+        self::assertSame(
+            MilestoneInputValidator::DESCRIPTION_MESSAGE,
+            $validation->fieldMessage(MilestoneSubmission::DESCRIPTION_FIELD)
+        );
     }
 
     public function testMissingDateIsRejectedAndNamesTheField(): void
@@ -80,6 +88,10 @@ final class MilestoneInputValidatorTest extends TestCase
 
         self::assertTrue($validation->isRejected());
         self::assertTrue($validation->namesField(MilestoneSubmission::DATE_FIELD));
+        self::assertSame(
+            MilestoneInputValidator::DATE_MESSAGE,
+            $validation->fieldMessage(MilestoneSubmission::DATE_FIELD)
+        );
         self::assertSame($submitted->toArray(), $validation->submission()->toArray());
     }
 
