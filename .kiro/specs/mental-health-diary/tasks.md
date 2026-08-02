@@ -399,7 +399,7 @@ Registration and authentication already have property tests in place (Properties
     - Update `LoginController`, `RegistrationController`, `AcceptInvitationController`, `AccountController` and `StatusPage`'s rendered markup to use the header/shell and card classes already in `app.css`, without changing any id, `for`, `name`, `action`, button label or fixed message text a current test asserts on
     - _Validates: no regression in the Unit/Http tests for these controllers_
 
-  - [ ] 22.5 Build a static, database-free preview generator (tools/preview/generate.php)
+  - [x] 22.5 Build a static, database-free preview generator (tools/preview/generate.php)
     - A standalone script that calls each controller's existing static render()/renderXxx() method with hand-built sample data (mirroring the fixtures already used in tests/Unit/Http/*) and writes the resulting HTML to public/preview/*.html: home, diary entry (blank, and with a saved entry plus a recommendation), summary (with metrics, insufficient-data, and unavailable outcomes), calendar (with entries and milestones), milestones list, viewers list, login, register, accept-invitation and the account deletion confirmation
     - No database, no session and no HTTP routing involved - pure static HTML generation from already-existing render methods, so it exercises no new production code path
     - Add `public/preview/` to `.gitignore`
@@ -408,7 +408,14 @@ Registration and authentication already have property tests in place (Properties
   - [ ] 22.6 Mobile responsiveness check and full regression run
     - Verify every page reflows without horizontal scroll from 320px up: stacked header nav, single-column cards, a shrinking calendar grid, labels stacked above inputs
     - Run the full PHPUnit suite (`vendor/bin/phpunit`) and confirm it is green; fix any regression by adjusting markup, not by weakening an assertion that checks a fixed requirement
-    - _No new tests are added by this subtask - it is a verification pass over 22.1-22.5._
+
+- [ ] 23. Fully close public registration now that the one owner account exists
+  - `app.registration_enabled` is already `false` in the deployed `config/config.php` (task 21.1), so `GET`/`POST /register` already render `RegistrationController::CLOSED_MESSAGE` and create no account. What remains is that `LoginController` still advertises a "Create an account" link pointing at that now-permanently-closed page - a dead end that should not be offered at all. Going forward the only way into this application is (a) the owner's own password, or (b) a viewer accepting an owner-issued invitation via `/accept-invitation` (Requirement 7.1); there is no in-app path that should ever invite creating a second owner account.
+
+  - [x] 23.1 Remove the "Create an account" link from the login page
+    - `LoginController::render()` must no longer render a link to `AccessControlService::REGISTER_PATH`
+    - Do not remove the `/register` route itself or change `RegistrationController`/the `registration_enabled` switch - the closed-page behaviour already satisfies "no new owner can register"; this subtask only removes the dead-end link a signed-out visitor would otherwise see
+    - _Validates: no regression in tests/Unit/Http/LoginControllerTest.php_
 
 ## Notes
 

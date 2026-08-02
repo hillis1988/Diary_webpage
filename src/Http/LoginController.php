@@ -163,7 +163,6 @@ final class LoginController
             . '                </div>' . "\n"
             . '                <button type="submit" class="button">Sign in</button>' . "\n"
             . '            </form>' . "\n"
-            . '            <p><a href="' . htmlspecialchars(AccessControlService::REGISTER_PATH, ENT_QUOTES, 'UTF-8') . '">Create an account</a></p>' . "\n"
             . '        </div>' . "\n"
             . '    </main>' . "\n"
             . '</body>' . "\n"
