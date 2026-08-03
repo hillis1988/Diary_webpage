@@ -10,6 +10,7 @@ use Diary\Access\ViewerAccessService;
 use Diary\Ai\AiConfig;
 use Diary\Ai\AiFeedbackService;
 use Diary\Ai\AiSummaryService;
+use Diary\Ai\CbtAdvice;
 use Diary\Ai\CbtRecommendation;
 use Diary\Ai\CbtRecommendationRepository;
 use Diary\Ai\ProgressSummary;
@@ -544,7 +545,11 @@ final class EndToEndJourneysTest extends TestCase
         $mood = SeriesStats::of($entryCount, 7.0, 6, 8, TrendDirection::Stable);
         $sleep = SeriesStats::of($entryCount, 4.0, 3, 5, TrendDirection::Stable);
 
-        return new ProgressSummary($narrative, TrendMetrics::of($entryCount, $mood, $sleep));
+        return new ProgressSummary(
+            $narrative,
+            new CbtAdvice('pattern', 'distortions', 'balanced perspective', 'next action'),
+            TrendMetrics::of($entryCount, $mood, $sleep)
+        );
     }
 
     private function countRows(string $table, string $column, string $value): int

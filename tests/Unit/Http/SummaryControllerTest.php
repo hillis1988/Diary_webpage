@@ -6,6 +6,7 @@ namespace Diary\Tests\Unit\Http;
 
 use Diary\Access\AccessControlService;
 use Diary\Ai\AiSummaryService;
+use Diary\Ai\CbtAdvice;
 use Diary\Ai\ProgressSummary;
 use Diary\Ai\ProviderError;
 use Diary\Ai\SeriesStats;
@@ -208,7 +209,11 @@ final class SummaryControllerTest extends TestCase
         $this->createEntries($owner, ['2025-03-01', '2025-03-02', '2025-03-03']);
 
         $stats = SeriesStats::of(3, 6.0, 5, 7, TrendDirection::Stable);
-        $this->provider->queue(new ProgressSummary('Mood has been steady this month.', TrendMetrics::of(3, $stats, $stats)));
+        $this->provider->queue(new ProgressSummary(
+            'Mood has been steady this month.',
+            new CbtAdvice('pattern', 'distortions', 'balanced perspective', 'next action'),
+            TrendMetrics::of(3, $stats, $stats)
+        ));
 
         $response = $this->controller->show($this->getRequest($context, [
             SummaryController::START_PARAM => '2025-03-01',

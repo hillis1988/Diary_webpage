@@ -48,6 +48,14 @@ final class TrendCalculator
             $entries
         );
 
+        $moodPoints = array_map(
+            static fn (DiaryEntry $entry): TrendPoint => new TrendPoint(
+                $entry->input()->date(),
+                $entry->input()->moodRating()
+            ),
+            $entries
+        );
+
         // Requirement 9.2: sleep quality is optional, so a missing answer is
         // excluded from the sleep series entirely rather than treated as zero.
         $sleepValues = array_values(array_filter(
@@ -58,20 +66,33 @@ final class TrendCalculator
             static fn (?int $value): bool => $value !== null
         ));
 
+        // Mirrors the exclusion above: a sleep point is built only for
+        // entries whose sleep quality question was answered.
+        $sleepPoints = array_values(array_filter(
+            array_map(
+                static fn (DiaryEntry $entry): ?TrendPoint => $entry->input()->sleepQuality() === null
+                    ? null
+                    : new TrendPoint($entry->input()->date(), $entry->input()->sleepQuality()),
+                $entries
+            ),
+            static fn (?TrendPoint $point): bool => $point !== null
+        ));
+
         $moodRange = QuestionSet::MOOD_MAX - QuestionSet::MOOD_MIN;
         $sleepRange = QuestionSet::SLEEP_MAX - QuestionSet::SLEEP_MIN;
 
         return TrendMetrics::of(
             entryCount: count($entries),
-            mood: $this->seriesStats($moodValues, $moodRange),
-            sleep: $this->seriesStats($sleepValues, $sleepRange),
+            mood: $this->seriesStats($moodValues, $moodRange, $moodPoints),
+            sleep: $this->seriesStats($sleepValues, $sleepRange, $sleepPoints),
         );
     }
 
     /**
      * @param list<int> $values in chronological order
+     * @param list<TrendPoint> $points in the same chronological order as $values
      */
-    private function seriesStats(array $values, int $scaleRange): SeriesStats
+    private function seriesStats(array $values, int $scaleRange, array $points): SeriesStats
     {
         $count = count($values);
 
@@ -79,14 +100,14 @@ final class TrendCalculator
             // No data points: nothing to average or bound, and no slope to
             // read a direction from. Stable is the safe default (documented
             // on SeriesStats) rather than guessing Improving or Declining.
-            return SeriesStats::of($count, null, null, null, TrendDirection::Stable);
+            return SeriesStats::of($count, null, null, null, TrendDirection::Stable, $points);
         }
 
         $mean = array_sum($values) / $count;
         $min = min($values);
         $max = max($values);
 
-        return SeriesStats::of($count, $mean, $min, $max, $this->direction($values, $scaleRange));
+        return SeriesStats::of($count, $mean, $min, $max, $this->direction($values, $scaleRange), $points);
     }
 
     /**

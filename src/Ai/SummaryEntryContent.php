@@ -6,6 +6,7 @@ namespace Diary\Ai;
 
 use Diary\Diary\DiaryEntry;
 use Diary\Support\LocalDate;
+use JsonSerializable;
 
 /**
  * The pseudonymised content of one Diary_Entry, exactly as handed to a
@@ -19,7 +20,7 @@ use Diary\Support\LocalDate;
  * alone, with no other identifier attached, does not narrow down who the
  * person is.
  */
-final class SummaryEntryContent
+final class SummaryEntryContent implements JsonSerializable
 {
     public function __construct(
         private readonly LocalDate $date,
@@ -78,5 +79,24 @@ final class SummaryEntryContent
     public function emotions(): string
     {
         return $this->emotions;
+    }
+
+    /**
+     * The pseudonymised Summary_Entry_Record shape sent to a
+     * {@see SummaryProvider} (Requirements 1.2, 1.7, 1.8, 10.1): a fixed key
+     * set with nulls and empty strings preserved rather than omitted.
+     *
+     * @return array{date: string, mood_rating: int, sleep_quality: ?int, events: string, thoughts: string, emotions: string}
+     */
+    public function jsonSerialize(): array
+    {
+        return [
+            'date' => $this->date->toIso(),
+            'mood_rating' => $this->moodRating,
+            'sleep_quality' => $this->sleepQuality,
+            'events' => $this->events,
+            'thoughts' => $this->thoughts,
+            'emotions' => $this->emotions,
+        ];
     }
 }

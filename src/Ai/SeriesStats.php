@@ -23,17 +23,24 @@ final class SeriesStats
         private readonly ?int $min,
         private readonly ?int $max,
         private readonly TrendDirection $direction,
+        private readonly array $points,
     ) {
     }
 
+    /**
+     * @param list<TrendPoint> $points chronologically ordered, one per
+     *     contributing entry; defaults to an empty list so every existing
+     *     positional call site continues to compile unchanged
+     */
     public static function of(
         int $count,
         ?float $mean,
         ?int $min,
         ?int $max,
         TrendDirection $direction,
+        array $points = [],
     ): self {
-        return new self($count, $mean, $min, $max, $direction);
+        return new self($count, $mean, $min, $max, $direction, $points);
     }
 
     /** How many values are in the series. */
@@ -63,5 +70,18 @@ final class SeriesStats
     public function direction(): TrendDirection
     {
         return $this->direction;
+    }
+
+    /**
+     * The dated data points this series was computed from, chronologically
+     * ordered. Empty for a series built without points (including every
+     * call site predating {@see TrendPoint}) and for an empty series
+     * (count() === 0).
+     *
+     * @return list<TrendPoint>
+     */
+    public function points(): array
+    {
+        return $this->points;
     }
 }

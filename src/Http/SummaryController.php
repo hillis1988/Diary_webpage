@@ -7,10 +7,13 @@ namespace Diary\Http;
 use Diary\Access\AccessControlService;
 use Diary\Access\Decision;
 use Diary\Ai\AiSummaryService;
+use Diary\Ai\ProgressSummary;
 use Diary\Ai\SeriesStats;
+use Diary\Ai\SharedTrendAxis;
 use Diary\Ai\SummaryOutcome;
 use Diary\Ai\TrendDirection;
 use Diary\Ai\TrendMetrics;
+use Diary\Ai\TrendPoint;
 use Diary\Auth\SecurityContext;
 use Diary\Diary\QuestionSet;
 use Diary\Support\Clock;
@@ -47,6 +50,19 @@ final class SummaryController
 
     /** The picker's pre-filled span when no range has been submitted yet. */
     private const DEFAULT_RANGE_DAYS = 30;
+
+    /**
+     * The Trend_Line_Chart's fixed SVG coordinate space (`viewBox="0 0 300
+     * 60"`): a left/right plotting margin so points near the ends of the
+     * date range are not clipped by their circle markers, and a top/bottom
+     * margin for the same reason on the value axis.
+     */
+    private const CHART_LEFT_X = 10.0;
+    private const CHART_RIGHT_X = 290.0;
+    private const CHART_CENTER_X = 150.0;
+    private const CHART_TOP_Y = 5.0;
+    private const CHART_BOTTOM_Y = 55.0;
+    private const CHART_PLOT_HEIGHT = self::CHART_BOTTOM_Y - self::CHART_TOP_Y;
 
     public function __construct(
         private readonly AccessControlService $access,
@@ -206,10 +222,82 @@ final class SummaryController
     private static function renderSummary(SummaryOutcome $outcome): string
     {
         $summary = $outcome->summaryValue();
+
+        try {
+            $notesCard = self::renderCbtNotesCard($summary);
+        } catch (\Throwable) {
+            $notesCard = self::renderNotesCardFallback();
+        }
+
+        return $notesCard . self::renderMetrics($summary->metrics());
+    }
+
+    /**
+     * The narrative and CBT advice presented in the same "AI CBT
+     * Therapist's notes" card {@see FeedbackView::renderNotes()} uses for a
+     * recommendation (Requirements 6.1, 6.2, 6.3, 6.4), reusing its heading
+     * text and CSS classes so the two AI surfaces look identical apart from
+     * their content.
+     */
+    private static function renderCbtNotesCard(ProgressSummary $summary): string
+    {
+        $safeHeading = htmlspecialchars(FeedbackView::NOTES_HEADING, ENT_QUOTES, 'UTF-8');
         $safeNarrative = htmlspecialchars($summary->narrative(), ENT_QUOTES, 'UTF-8');
 
-        return '            <p>' . $safeNarrative . '</p>' . "\n"
-            . self::renderMetrics($summary->metrics());
+        $advice = $summary->advice();
+        $safePattern = htmlspecialchars($advice->pattern(), ENT_QUOTES, 'UTF-8');
+        $safeDistortions = htmlspecialchars($advice->distortions(), ENT_QUOTES, 'UTF-8');
+        $safeBalancedPerspective = htmlspecialchars($advice->balancedPerspective(), ENT_QUOTES, 'UTF-8');
+        $safeNextAction = htmlspecialchars($advice->nextAction(), ENT_QUOTES, 'UTF-8');
+
+        return '            <div class="cbt-notes">' . "\n"
+            . '                <hr class="cbt-notes__divider">' . "\n"
+            . '                <h3 class="cbt-notes__heading">' . $safeHeading . '</h3>' . "\n"
+            . '                <div class="cbt-notes__section">' . "\n"
+            . '                    <h4 class="cbt-notes__label">Summary</h4>' . "\n"
+            . '                    <p>' . $safeNarrative . '</p>' . "\n"
+            . '                </div>' . "\n"
+            . '                <div class="cbt-notes__section">' . "\n"
+            . '                    <h4 class="cbt-notes__label">Advice</h4>' . "\n"
+            . '                    <div class="cbt-notes__advice-part">' . "\n"
+            . '                        <h5 class="cbt-notes__advice-label">Pattern</h5>' . "\n"
+            . '                        <p>' . $safePattern . '</p>' . "\n"
+            . '                    </div>' . "\n"
+            . '                    <div class="cbt-notes__advice-part">' . "\n"
+            . '                        <h5 class="cbt-notes__advice-label">Cognitive distortions</h5>' . "\n"
+            . '                        <p>' . $safeDistortions . '</p>' . "\n"
+            . '                    </div>' . "\n"
+            . '                    <div class="cbt-notes__advice-part">' . "\n"
+            . '                        <h5 class="cbt-notes__advice-label">Balanced perspective</h5>' . "\n"
+            . '                        <p>' . $safeBalancedPerspective . '</p>' . "\n"
+            . '                    </div>' . "\n"
+            . '                    <div class="cbt-notes__advice-part">' . "\n"
+            . '                        <h5 class="cbt-notes__advice-label">Next step</h5>' . "\n"
+            . '                        <p>' . $safeNextAction . '</p>' . "\n"
+            . '                    </div>' . "\n"
+            . '                </div>' . "\n"
+            . '            </div>' . "\n";
+    }
+
+    /**
+     * The same outer `cbt-notes` card, shown when {@see renderCbtNotesCard()}
+     * throws - a defensive fallback so a rendering failure never breaks the
+     * whole summary page.
+     */
+    private static function renderNotesCardFallback(): string
+    {
+        $safeHeading = htmlspecialchars(FeedbackView::NOTES_HEADING, ENT_QUOTES, 'UTF-8');
+        $safeMessage = htmlspecialchars(
+            "The AI CBT Therapist's notes could not be displayed.",
+            ENT_QUOTES,
+            'UTF-8'
+        );
+
+        return '            <div class="cbt-notes">' . "\n"
+            . '                <hr class="cbt-notes__divider">' . "\n"
+            . '                <h3 class="cbt-notes__heading">' . $safeHeading . '</h3>' . "\n"
+            . '                <p>' . $safeMessage . '</p>' . "\n"
+            . '            </div>' . "\n";
     }
 
     private static function renderMetrics(TrendMetrics $metrics): string
@@ -233,50 +321,53 @@ final class SummaryController
         $safeDirection = htmlspecialchars(self::directionLabel($stats->direction()), ENT_QUOTES, 'UTF-8');
 
         return '            <h2>' . $safeLabel . '</h2>' . "\n"
-            . self::renderTrendBar($stats, $scaleMin, $scaleMax)
+            . self::renderLineChart($stats, $scaleMin, $scaleMax)
             . '            <dl>' . "\n"
             . '                <dt>Count</dt><dd>' . $stats->count() . '</dd>' . "\n"
-            . '                <dt>Mean</dt><dd>' . self::formatNullableNumber($stats->mean()) . '</dd>' . "\n"
-            . '                <dt>Minimum</dt><dd>' . self::formatNullableNumber($stats->min()) . '</dd>' . "\n"
-            . '                <dt>Maximum</dt><dd>' . self::formatNullableNumber($stats->max()) . '</dd>' . "\n"
+            . '                <dt>Mean</dt><dd>' . self::formatNullableScaledNumber($stats->mean(), $scaleMax) . '</dd>' . "\n"
+            . '                <dt>Minimum</dt><dd>' . self::formatNullableScaledNumber($stats->min(), $scaleMax) . '</dd>' . "\n"
+            . '                <dt>Maximum</dt><dd>' . self::formatNullableScaledNumber($stats->max(), $scaleMax) . '</dd>' . "\n"
             . '                <dt>Direction</dt><dd>' . $safeDirection . '</dd>' . "\n"
             . '            </dl>' . "\n";
     }
 
     /**
-     * A `.trend` gauge: the track spans the question's fixed scale, `.trend__fill`
-     * covers the observed min-max range, `.trend__mean` marks the mean within it,
-     * and a `.badge--direction-*` names the direction - rendered only when there
-     * is at least one value in the series, since an empty series has no
-     * min/max/mean to place on the track.
+     * A `.trend` card containing a `.trend-chart` inline SVG line chart: one
+     * `.trend-chart__point` circle plus connecting `.trend-chart__line`
+     * polyline per {@see TrendPoint} (x = the point's date position within
+     * the plotted range, y = {@see SharedTrendAxis::positionOf()} inverted
+     * for SVG's downward-growing y axis), a dashed `.trend-chart__mean-line`
+     * at the mean's shared-axis position, and a `.badge--direction-*`
+     * naming the direction - rendered only when there is at least one point
+     * in the series, since an empty series has nothing to plot.
      */
-    private static function renderTrendBar(SeriesStats $stats, int $scaleMin, int $scaleMax): string
+    private static function renderLineChart(SeriesStats $stats, int $scaleMin, int $scaleMax): string
     {
         $min = $stats->min();
         $max = $stats->max();
         $mean = $stats->mean();
+        $points = $stats->points();
 
-        if ($min === null || $max === null || $mean === null) {
+        if ($stats->count() === 0 || $min === null || $max === null || $mean === null) {
             return '';
         }
-
-        $scaleSpan = $scaleMax - $scaleMin;
-        $minPercent = self::percentOfScale($min, $scaleMin, $scaleSpan);
-        $maxPercent = self::percentOfScale($max, $scaleMin, $scaleSpan);
-        $widthPercent = max(0.0, $maxPercent - $minPercent);
-        $meanPercent = self::percentOfScale($mean, $scaleMin, $scaleSpan);
 
         $directionValue = htmlspecialchars($stats->direction()->value, ENT_QUOTES, 'UTF-8');
         $safeDirectionLabel = htmlspecialchars(self::directionLabel($stats->direction()), ENT_QUOTES, 'UTF-8');
 
+        $meanY = self::formatCoordinate(self::valueToY($mean, $scaleMin, $scaleMax));
+
         return '            <div class="trend">' . "\n"
             . '                <div class="trend__label">' . "\n"
-            . '                    <span>' . self::formatNullableNumber($min) . '</span>' . "\n"
-            . '                    <span>' . self::formatNullableNumber($max) . '</span>' . "\n"
+            . '                    <span>' . self::formatNullableScaledNumber($min, $scaleMax) . '</span>' . "\n"
+            . '                    <span>' . self::formatNullableScaledNumber($max, $scaleMax) . '</span>' . "\n"
             . '                </div>' . "\n"
-            . '                <div class="trend__track">' . "\n"
-            . '                    <div class="trend__fill" style="left: ' . self::formatPercent($minPercent) . '%; width: ' . self::formatPercent($widthPercent) . '%;"></div>' . "\n"
-            . '                    <div class="trend__mean" style="left: ' . self::formatPercent($meanPercent) . '%;"></div>' . "\n"
+            . '                <div class="trend-chart">' . "\n"
+            . '                    <svg class="trend-chart__svg" viewBox="0 0 300 60" preserveAspectRatio="none" role="img" aria-label="' . $safeDirectionLabel . '">' . "\n"
+            . '                        <line class="trend-chart__mean-line" x1="' . self::formatCoordinate(self::CHART_LEFT_X) . '" y1="' . $meanY . '" x2="' . self::formatCoordinate(self::CHART_RIGHT_X) . '" y2="' . $meanY . '"></line>' . "\n"
+            . self::renderPolyline($points, $scaleMin, $scaleMax)
+            . self::renderPointMarkers($points, $scaleMin, $scaleMax)
+            . '                    </svg>' . "\n"
             . '                </div>' . "\n"
             . '                <div class="trend__direction">' . "\n"
             . '                    <span class="badge badge--direction-' . $directionValue . '">' . $safeDirectionLabel . '</span>' . "\n"
@@ -284,21 +375,104 @@ final class SummaryController
             . '            </div>' . "\n";
     }
 
-    /** A value's position along [$scaleMin, $scaleMin + $scaleSpan] as 0-100, clamped. */
-    private static function percentOfScale(int|float $value, int $scaleMin, int $scaleSpan): float
+    /**
+     * A single `.trend-chart__line` polyline through every point, in
+     * chronological order. Rendered even for a single point (a
+     * zero-length/degenerate polyline), so the point marker is the only
+     * visible mark - matching the "place it centred" rule for a single
+     * point or a series where every point shares one date.
+     *
+     * @param list<TrendPoint> $points
+     */
+    private static function renderPolyline(array $points, int $scaleMin, int $scaleMax): string
     {
-        if ($scaleSpan <= 0) {
-            return 0.0;
+        if ($points === []) {
+            return '';
         }
 
-        $percent = (($value - $scaleMin) / $scaleSpan) * 100;
+        $coordinates = [];
+        foreach (self::plottedCoordinates($points, $scaleMin, $scaleMax) as [$x, $y]) {
+            $coordinates[] = self::formatCoordinate($x) . ',' . self::formatCoordinate($y);
+        }
 
-        return max(0.0, min(100.0, $percent));
+        return '                        <polyline class="trend-chart__line" points="' . implode(' ', $coordinates) . '"></polyline>' . "\n";
     }
 
-    private static function formatPercent(float $percent): string
+    /**
+     * A `.trend-chart__point` circle marker at each actual data point, so
+     * the line is legible rather than a bare polyline.
+     *
+     * @param list<TrendPoint> $points
+     */
+    private static function renderPointMarkers(array $points, int $scaleMin, int $scaleMax): string
     {
-        return number_format($percent, 1);
+        $markers = '';
+
+        foreach (self::plottedCoordinates($points, $scaleMin, $scaleMax) as [$x, $y]) {
+            $markers .= '                        <circle class="trend-chart__point" cx="' . self::formatCoordinate($x) . '" cy="' . self::formatCoordinate($y) . '" r="2.5"></circle>' . "\n";
+        }
+
+        return $markers;
+    }
+
+    /**
+     * Each point's plotted `[x, y]` SVG coordinate: x proportional to the
+     * point's date position within the earliest-to-latest plotted range
+     * (centred when every point shares one date, or there is only one
+     * point), y via {@see valueToY()}.
+     *
+     * Returns an empty list when given no points - this can happen for a
+     * SeriesStats built without a points list (every call site predating
+     * {@see TrendPoint}), even though count() is non-zero; there is simply
+     * nothing to plot a line through in that case.
+     *
+     * @param list<TrendPoint> $points
+     * @return list<array{0: float, 1: float}>
+     */
+    private static function plottedCoordinates(array $points, int $scaleMin, int $scaleMax): array
+    {
+        if ($points === []) {
+            return [];
+        }
+
+        $epochDays = array_map(
+            static fn (TrendPoint $point): int => $point->date()->toEpochDay(),
+            $points
+        );
+        $earliest = min($epochDays);
+        $latest = max($epochDays);
+        $dateSpan = $latest - $earliest;
+
+        $coordinates = [];
+
+        foreach ($points as $index => $point) {
+            $x = $dateSpan > 0
+                ? self::CHART_LEFT_X + ($epochDays[$index] - $earliest) / $dateSpan * (self::CHART_RIGHT_X - self::CHART_LEFT_X)
+                : self::CHART_CENTER_X;
+
+            $coordinates[] = [$x, self::valueToY($point->value(), $scaleMin, $scaleMax)];
+        }
+
+        return $coordinates;
+    }
+
+    /**
+     * A value's y-coordinate in the chart's SVG space, via {@see
+     * SharedTrendAxis::positionOf()} - the same shared-axis scaling the
+     * numeric labels are deliberately kept independent from - inverted
+     * because SVG's y axis grows downward while a higher value should plot
+     * higher (visually, nearer the top) on screen.
+     */
+    private static function valueToY(int|float $value, int $scaleMin, int $scaleMax): float
+    {
+        $axisPosition = SharedTrendAxis::positionOf($value, $scaleMin, $scaleMax);
+
+        return self::CHART_BOTTOM_Y - ($axisPosition / 10) * self::CHART_PLOT_HEIGHT;
+    }
+
+    private static function formatCoordinate(float $coordinate): string
+    {
+        return number_format($coordinate, 2);
     }
 
     private static function directionLabel(TrendDirection $direction): string
@@ -313,6 +487,23 @@ final class SummaryController
         }
 
         return is_float($value) ? number_format($value, 1) : (string) $value;
+    }
+
+    /**
+     * The value formatted on its own native scale (never the shared axis),
+     * with a "/$scaleMax" suffix (e.g. "/10" for mood, "/5" for sleep) so
+     * readers know which scale a number belongs to. No suffix for a null
+     * value - it stays plain "n/a".
+     */
+    private static function formatNullableScaledNumber(int|float|null $value, int $scaleMax): string
+    {
+        $formatted = self::formatNullableNumber($value);
+
+        if ($value === null) {
+            return $formatted;
+        }
+
+        return $formatted . '/' . $scaleMax;
     }
 
     private static function renderMessage(string $message): string

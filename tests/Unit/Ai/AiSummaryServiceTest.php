@@ -6,6 +6,7 @@ namespace Diary\Tests\Unit\Ai;
 
 use Diary\Access\OwnerId;
 use Diary\Ai\AiSummaryService;
+use Diary\Ai\CbtAdvice;
 use Diary\Ai\ProgressSummary;
 use Diary\Ai\ProviderError;
 use Diary\Ai\TrendMetrics;
@@ -135,7 +136,7 @@ final class AiSummaryServiceTest extends TestCase
         $this->createEntries($owner, ['2025-03-01', '2025-03-02']);
 
         $provider = new FakeSummaryProvider();
-        $provider->queue(new ProgressSummary('would have succeeded anyway', TrendMetrics::of(3, ...$this->stubStats())));
+        $provider->queue(new ProgressSummary('would have succeeded anyway', $this->stubAdvice(), TrendMetrics::of(3, ...$this->stubStats())));
 
         $outcome = $this->service($provider)->summarise($owner, $this->range('2025-03-01', '2025-03-31'));
 
@@ -174,7 +175,7 @@ final class AiSummaryServiceTest extends TestCase
         $this->createEntries($owner, ['2025-03-01', '2025-03-02', '2025-03-03']);
 
         $provider = new FakeSummaryProvider();
-        $provider->queue(new ProgressSummary('Mood has been steady this month.', TrendMetrics::of(3, ...$this->stubStats())));
+        $provider->queue(new ProgressSummary('Mood has been steady this month.', $this->stubAdvice(), TrendMetrics::of(3, ...$this->stubStats())));
 
         $outcome = $this->service($provider)->summarise($owner, $this->range('2025-03-01', '2025-03-31'));
 
@@ -205,7 +206,7 @@ final class AiSummaryServiceTest extends TestCase
         $this->createEntries($owner, ['2025-02-28', '2025-03-01', '2025-03-02', '2025-03-03', '2025-03-04', '2025-03-05']);
 
         $provider = new FakeSummaryProvider();
-        $provider->queue(new ProgressSummary('narrative', TrendMetrics::of(3, ...$this->stubStats())));
+        $provider->queue(new ProgressSummary('narrative', $this->stubAdvice(), TrendMetrics::of(3, ...$this->stubStats())));
 
         $this->service($provider)->summarise($owner, $this->range('2025-03-01', '2025-03-03'));
 
@@ -222,7 +223,7 @@ final class AiSummaryServiceTest extends TestCase
         $this->createEntries($otherOwner, ['2025-03-01', '2025-03-02', '2025-03-03', '2025-03-04']);
 
         $provider = new FakeSummaryProvider();
-        $provider->queue(new ProgressSummary('narrative', TrendMetrics::of(3, ...$this->stubStats())));
+        $provider->queue(new ProgressSummary('narrative', $this->stubAdvice(), TrendMetrics::of(3, ...$this->stubStats())));
 
         $this->service($provider)->summarise($owner, $this->range('2025-03-01', '2025-03-31'));
 
@@ -239,7 +240,7 @@ final class AiSummaryServiceTest extends TestCase
         $this->milestoneService->create($owner, $this->acceptedMilestoneValidation($this->milestoneInput('2025-04-01')), $this->clock);
 
         $provider = new FakeSummaryProvider();
-        $provider->queue(new ProgressSummary('narrative', TrendMetrics::of(3, ...$this->stubStats())));
+        $provider->queue(new ProgressSummary('narrative', $this->stubAdvice(), TrendMetrics::of(3, ...$this->stubStats())));
 
         $this->service($provider)->summarise($owner, $this->range('2025-03-01', '2025-03-31'));
 
@@ -256,7 +257,7 @@ final class AiSummaryServiceTest extends TestCase
         $this->milestoneService->create($otherOwner, $this->acceptedMilestoneValidation($this->milestoneInput('2025-03-02')), $this->clock);
 
         $provider = new FakeSummaryProvider();
-        $provider->queue(new ProgressSummary('narrative', TrendMetrics::of(3, ...$this->stubStats())));
+        $provider->queue(new ProgressSummary('narrative', $this->stubAdvice(), TrendMetrics::of(3, ...$this->stubStats())));
 
         $this->service($provider)->summarise($owner, $this->range('2025-03-01', '2025-03-31'));
 
@@ -298,5 +299,10 @@ final class AiSummaryServiceTest extends TestCase
         $stats = \Diary\Ai\SeriesStats::of(3, 6.0, 5, 7, \Diary\Ai\TrendDirection::Stable);
 
         return [$stats, $stats];
+    }
+
+    private function stubAdvice(): CbtAdvice
+    {
+        return new CbtAdvice('pattern', 'distortions', 'balanced perspective', 'next action');
     }
 }

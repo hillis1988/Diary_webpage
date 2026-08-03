@@ -56,9 +56,18 @@ final class HttpsSummaryProviderTest extends TestCase
 
     private function successResponse(string $narrative = 'Mood has been steady this month.'): HttpResponse
     {
+        $content = json_encode([
+            'summary' => $narrative,
+            'advice' => [
+                'pattern' => 'Noticing a pattern of negative self-talk.',
+                'distortions' => 'Catastrophizing and all-or-nothing thinking.',
+                'balanced_perspective' => 'One difficult week does not define the whole month.',
+                'next_action' => 'Try writing down one positive moment each day.',
+            ],
+        ], JSON_THROW_ON_ERROR);
         $body = json_encode([
             'choices' => [
-                ['message' => ['content' => json_encode(['narrative' => $narrative], JSON_THROW_ON_ERROR)]],
+                ['message' => ['content' => $content]],
             ],
         ], JSON_THROW_ON_ERROR);
 
@@ -150,7 +159,7 @@ final class HttpsSummaryProviderTest extends TestCase
         }
     }
 
-    public function testGenerateThrowsProviderErrorWhenTheResponseIsMissingTheNarrativeField(): void
+    public function testGenerateThrowsProviderErrorWhenTheResponseIsMissingTheSummaryField(): void
     {
         $body = json_encode([
             'choices' => [

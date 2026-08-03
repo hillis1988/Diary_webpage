@@ -17,6 +17,7 @@ final class ProgressSummary
 {
     public function __construct(
         private readonly string $narrative,
+        private readonly CbtAdvice $advice,
         private readonly TrendMetrics $metrics,
     ) {
     }
@@ -24,6 +25,11 @@ final class ProgressSummary
     public function narrative(): string
     {
         return $this->narrative;
+    }
+
+    public function advice(): CbtAdvice
+    {
+        return $this->advice;
     }
 
     public function metrics(): TrendMetrics

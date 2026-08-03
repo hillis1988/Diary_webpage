@@ -22,6 +22,7 @@ declare(strict_types=1);
 
 use Diary\Access\NavigationItem;
 use Diary\Access\OwnerId;
+use Diary\Ai\CbtAdvice;
 use Diary\Ai\CbtRecommendation;
 use Diary\Ai\FeedbackOutcome;
 use Diary\Ai\ProgressSummary;
@@ -222,6 +223,12 @@ try {
 
     $summaryWithMetrics = SummaryOutcome::summary(new ProgressSummary(
         'Your mood has trended upward over the past month, with steadier sleep as well.',
+        new CbtAdvice(
+            'You tend to notice the hard days more than the steady ones, so the overall improvement can be easy to miss.',
+            'Discounting the positive - focusing on setbacks while overlooking the gradual gains in mood and sleep.',
+            'The data shows real, sustained progress even though some days still feel difficult.',
+            'Note one small win each evening this week, even on the harder days.',
+        ),
         TrendMetrics::of(
             12,
             SeriesStats::of(12, 6.8, 3, 9, TrendDirection::Improving),

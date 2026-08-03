@@ -7,6 +7,7 @@ namespace Diary\Tests\Unit\Ai;
 use Diary\Access\OwnerId;
 use Diary\Ai\TrendCalculator;
 use Diary\Ai\TrendDirection;
+use Diary\Ai\TrendPoint;
 use Diary\Diary\DiaryEntry;
 use Diary\Diary\DiaryEntryInput;
 use Diary\Support\LocalDate;
@@ -140,6 +141,66 @@ final class TrendCalculatorTest extends TestCase
         self::assertSame(TrendDirection::Stable, $metrics->mood()->direction());
         self::assertSame(1, $metrics->sleep()->count());
         self::assertSame(TrendDirection::Stable, $metrics->sleep()->direction());
+    }
+
+    public function testMoodSeriesAttachesOneDatedPointPerEntryInOrder(): void
+    {
+        $entries = $this->entries([
+            ['mood' => 4, 'sleep' => 3],
+            ['mood' => 6, 'sleep' => null],
+            ['mood' => 8, 'sleep' => 2],
+        ]);
+
+        $metrics = $this->calculator->compute($entries);
+        $points = $metrics->mood()->points();
+
+        self::assertCount(3, $points);
+        self::assertSame(['2024-01-01', '2024-01-02', '2024-01-03'], self::pointDates($points));
+        self::assertSame([4, 6, 8], self::pointValues($points));
+    }
+
+    public function testSleepSeriesAttachesPointsOnlyForEntriesWithNonNullSleepQuality(): void
+    {
+        $entries = $this->entries([
+            ['mood' => 5, 'sleep' => 3],
+            ['mood' => 5, 'sleep' => null],
+            ['mood' => 5, 'sleep' => 5],
+        ]);
+
+        $metrics = $this->calculator->compute($entries);
+        $points = $metrics->sleep()->points();
+
+        // Same entries/order the value-only assertions already exercise:
+        // the middle entry (null sleep quality) is excluded entirely.
+        self::assertCount(2, $points);
+        self::assertSame(['2024-01-01', '2024-01-03'], self::pointDates($points));
+        self::assertSame([3, 5], self::pointValues($points));
+    }
+
+    public function testZeroEntriesYieldsNoPointsForEitherSeries(): void
+    {
+        $metrics = $this->calculator->compute([]);
+
+        self::assertSame([], $metrics->mood()->points());
+        self::assertSame([], $metrics->sleep()->points());
+    }
+
+    /**
+     * @param list<TrendPoint> $points
+     * @return list<string>
+     */
+    private static function pointDates(array $points): array
+    {
+        return array_map(static fn (TrendPoint $point): string => $point->date()->toIso(), $points);
+    }
+
+    /**
+     * @param list<TrendPoint> $points
+     * @return list<int>
+     */
+    private static function pointValues(array $points): array
+    {
+        return array_map(static fn (TrendPoint $point): int => $point->value(), $points);
     }
 
     /**

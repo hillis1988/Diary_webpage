@@ -41,7 +41,7 @@ final class HttpsSummaryProvider implements SummaryProvider
             throw new ProviderError('AI summary is disabled by configuration.');
         }
 
-        $requestBody = $this->buildRequestBody($input);
+        $payload = $this->promptBuilder->buildPayload($input);
         $headers = [
             'Content-Type' => 'application/json',
             'Authorization' => 'Bearer ' . $this->config->apiKey(),
@@ -53,6 +53,7 @@ final class HttpsSummaryProvider implements SummaryProvider
 
         for ($attempt = 0; $attempt < $attempts; $attempt++) {
             try {
+                $requestBody = $this->buildRequestBody($payload);
                 $response = $this->transport->post(
                     $this->config->endpoint(),
                     $headers,
@@ -61,7 +62,7 @@ final class HttpsSummaryProvider implements SummaryProvider
                 );
 
                 return $this->parseSummary($response, $input->metrics());
-            } catch (HttpTransportException|ProviderError $exception) {
+            } catch (JsonException|HttpTransportException|ProviderError $exception) {
                 $lastFailure = $exception;
             }
         }
@@ -73,18 +74,19 @@ final class HttpsSummaryProvider implements SummaryProvider
         );
     }
 
-    private function buildRequestBody(SummaryInput $input): string
+    private function buildRequestBody(SummaryPayload $payload): string
     {
-        $payload = [
+        $userContent = json_encode($payload, JSON_THROW_ON_ERROR);
+        $body = [
             'model' => $this->config->model(),
             'response_format' => ['type' => 'json_object'],
             'messages' => [
                 ['role' => 'system', 'content' => $this->promptBuilder->systemPrompt()],
-                ['role' => 'user', 'content' => $this->promptBuilder->userPrompt($input)],
+                ['role' => 'user', 'content' => $userContent],
             ],
         ];
 
-        return json_encode($payload, JSON_THROW_ON_ERROR);
+        return json_encode($body, JSON_THROW_ON_ERROR);
     }
 
     /**
@@ -105,15 +107,40 @@ final class HttpsSummaryProvider implements SummaryProvider
         $content = $this->messageContent($envelope);
         $decoded = $this->decodeJson($content);
 
-        $narrative = $decoded['narrative'] ?? null;
+        $summary = $decoded['summary'] ?? null;
 
-        if (!is_string($narrative)) {
+        if (!is_string($summary) || $summary === '') {
             throw new ProviderError(
-                'The AI provider response did not contain the expected narrative field.'
+                'The AI provider response did not contain the expected summary field.'
             );
         }
 
-        return new ProgressSummary($narrative, $metrics);
+        $advice = $decoded['advice'] ?? null;
+        $advice = is_array($advice) ? $advice : [];
+
+        $fields = [];
+        foreach (['pattern', 'distortions', 'balanced_perspective', 'next_action'] as $key) {
+            $value = $advice[$key] ?? null;
+
+            if (!is_string($value) || $value === '') {
+                throw new ProviderError(
+                    'The AI provider response did not contain a valid advice.' . $key . ' field.'
+                );
+            }
+
+            $fields[$key] = $value;
+        }
+
+        return new ProgressSummary(
+            $summary,
+            new CbtAdvice(
+                $fields['pattern'],
+                $fields['distortions'],
+                $fields['balanced_perspective'],
+                $fields['next_action'],
+            ),
+            $metrics,
+        );
     }
 
     /**

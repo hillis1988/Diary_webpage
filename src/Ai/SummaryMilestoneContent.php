@@ -7,6 +7,7 @@ namespace Diary\Ai;
 use Diary\Milestone\Milestone;
 use Diary\Milestone\MilestoneCategory;
 use Diary\Support\LocalDate;
+use JsonSerializable;
 
 /**
  * The pseudonymised content of one Milestone, exactly as handed to a
@@ -15,7 +16,7 @@ use Diary\Support\LocalDate;
  * Mirrors {@see SummaryEntryContent}'s precedent: date, description and
  * category only - no owner id and no milestone id.
  */
-final class SummaryMilestoneContent
+final class SummaryMilestoneContent implements JsonSerializable
 {
     public function __construct(
         private readonly LocalDate $date,
@@ -42,5 +43,20 @@ final class SummaryMilestoneContent
     public function category(): MilestoneCategory
     {
         return $this->category;
+    }
+
+    /**
+     * The pseudonymised Summary_Milestone_Record shape sent to a
+     * {@see SummaryProvider} (Requirements 1.3, 10.1).
+     *
+     * @return array{date: string, category: string, description: string}
+     */
+    public function jsonSerialize(): array
+    {
+        return [
+            'date' => $this->date->toIso(),
+            'category' => $this->category->value,
+            'description' => $this->description,
+        ];
     }
 }

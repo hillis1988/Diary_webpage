@@ -459,6 +459,10 @@ button:hover,
 /* ---- Trend gauge (summary page) ------------------------------------------------- */
 
 .trend {
+    background: var(--colour-surface-alt);
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-sm);
+    padding: 0.65rem 0.75rem 0.5rem;
     margin-bottom: 0.9rem;
 }
 
@@ -470,30 +474,39 @@ button:hover,
     margin-bottom: 0.25rem;
 }
 
-.trend__track {
-    position: relative;
-    height: 0.5rem;
-    border-radius: 999px;
-    background: var(--colour-surface-alt);
+.trend-chart {
+    border-radius: var(--radius-sm);
+    background: var(--colour-bg);
     border: 1px solid var(--colour-border);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    padding: 0.3rem;
 }
 
-.trend__fill {
-    position: absolute;
-    top: -1px;
-    bottom: -1px;
-    left: 0;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--colour-accent) 35%, var(--colour-surface-alt));
+.trend-chart__svg {
+    display: block;
+    width: 100%;
+    height: 3.75rem;
 }
 
-.trend__mean {
-    position: absolute;
-    top: -3px;
-    bottom: -3px;
-    width: 3px;
-    background: var(--colour-accent-dark);
-    border-radius: 2px;
+.trend-chart__line {
+    fill: none;
+    stroke: var(--colour-accent);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.trend-chart__mean-line {
+    stroke: var(--colour-text);
+    stroke-width: 1;
+    stroke-dasharray: 4 3;
+    opacity: 0.6;
+}
+
+.trend-chart__point {
+    fill: var(--colour-accent-dark);
+    stroke: var(--colour-bg);
+    stroke-width: 1;
 }
 
 .trend__direction {
@@ -581,6 +594,23 @@ dd {
 
 .cbt-notes__section p {
     margin: 0;
+}
+
+.cbt-notes__advice-part {
+    margin-bottom: 0.6rem;
+}
+
+.cbt-notes__advice-part:last-child {
+    margin-bottom: 0;
+}
+
+.cbt-notes__advice-label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--colour-muted);
+    margin: 0 0 0.2rem;
 }
 
 /* ---- Responsive breakpoints ----------------------------------------------------- */
