@@ -1,0 +1,42 @@
+{
+    "name": "royhillis/mental-health-diary",
+    "description": "Personal mental health diary with CBT-style AI feedback, milestones, calendar and progress summaries.",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.2",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-openssl": "*",
+        "ext-pdo": "*"
+    },
+    "require-dev": {
+        "giorgiosironi/eris": "^1.0",
+        "phpunit/phpunit": "^10.5 || ^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Diary\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Diary\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test:unit": "phpunit --testsuite Unit",
+        "test:property": "phpunit --testsuite Property",
+        "test:integration": "phpunit --testsuite Integration",
+        "migrate": "php tools/migrate.php"
+    },
+    "scripts-descriptions": {
+        "test": "Run every test suite (Unit, Property, Integration).",
+        "migrate": "Apply pending database migrations from migrations/."
+    }
+}
