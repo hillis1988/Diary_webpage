@@ -1,0 +1,711 @@
+/*
+ * Base stylesheet. Plain CSS, no build step: the deployable artefact is just files.
+ * Accessibility baseline: system font stack, high-contrast text, visible focus, and a
+ * layout that reflows without horizontal scrolling down to 320px.
+ *
+ * Visual design: a dark, editorial personal-journal look (near-black surfaces,
+ * a warm gold/amber accent, a serif heading font) inspired by journaling apps
+ * rather than a generic admin/dashboard style. Mobile-first: base rules target
+ * a 320px-wide viewport, then two breakpoints (600px, 900px) widen the layout.
+ */
+
+:root {
+    --colour-bg: #17140f;
+    --colour-surface: #221d16;
+    --colour-surface-alt: #2b241a;
+    --colour-text: #f4ecdf;
+    --colour-muted: #b6a892;
+    --colour-accent: #e0a526;
+    --colour-accent-dark: #f0bb4e;
+    --colour-secondary: #8fb08f;
+    --colour-border: #3d3325;
+    --colour-error: #e2836f;
+
+    --radius: 14px;
+    --radius-sm: 8px;
+    --space: 1rem;
+    --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.3);
+
+    --font-heading: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background: var(--colour-bg);
+    color: var(--colour-text);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    line-height: 1.55;
+}
+
+main {
+    max-width: 40rem;
+    margin: 0 auto;
+    padding: var(--space);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space);
+}
+
+h1, h2, h3 {
+    font-family: var(--font-heading);
+    color: var(--colour-accent-dark);
+    margin: 0 0 0.5rem;
+}
+
+h1 {
+    font-size: 1.6rem;
+}
+
+h2 {
+    font-size: 1.15rem;
+}
+
+p {
+    margin: 0 0 0.75rem;
+}
+
+a {
+    color: var(--colour-accent-dark);
+    text-decoration: underline;
+}
+
+a:hover {
+    color: var(--colour-accent);
+}
+
+:focus-visible {
+    outline: 3px solid var(--colour-accent);
+    outline-offset: 2px;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* ---- Page shell / header ------------------------------------------------ */
+
+.app-header {
+    background: var(--colour-surface);
+    border-bottom: 1px solid var(--colour-border);
+    padding: 0.85rem var(--space);
+}
+
+.app-header__bar {
+    max-width: 40rem;
+    margin: 0 auto;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-right: 5.5rem;
+}
+
+.app-header__sign-out {
+    position: absolute;
+    top: 0;
+    right: 0;
+}
+
+.app-header__sign-out .button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.app-header__title {
+    font-family: var(--font-heading);
+    font-size: 1.35rem;
+    color: var(--colour-accent-dark);
+    margin: 0;
+}
+
+.app-header__back {
+    font-size: 0.9rem;
+    color: var(--colour-muted);
+    text-decoration: none;
+}
+
+.app-header__back:hover {
+    color: var(--colour-accent-dark);
+    text-decoration: underline;
+}
+
+/* ---- Cards --------------------------------------------------------------- */
+
+.card {
+    background: var(--colour-surface);
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    padding: 1.1rem 1.15rem;
+}
+
+.card + .card {
+    margin-top: 0;
+}
+
+.card--muted {
+    background: var(--colour-surface-alt);
+}
+
+/* ---- Navigation as cards -------------------------------------------------- */
+
+.nav-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.nav-grid__link {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--colour-surface);
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    padding: 0.9rem 1rem;
+    color: var(--colour-text);
+    text-decoration: none;
+    font-weight: 600;
+    transition: transform 0.08s ease, border-color 0.15s ease;
+}
+
+.nav-grid__link:hover {
+    border-color: var(--colour-accent);
+    transform: translateY(-1px);
+}
+
+.nav-grid__icon {
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+/* ---- Forms ---------------------------------------------------------------- */
+
+.field-group {
+    margin-bottom: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.field-group label {
+    font-weight: 600;
+    font-size: 0.92rem;
+    color: var(--colour-text);
+}
+
+.field-group input[type="text"],
+.field-group input[type="email"],
+.field-group input[type="password"],
+.field-group input[type="date"],
+.field-group select,
+.field-group textarea {
+    font: inherit;
+    color: var(--colour-text);
+    background: var(--colour-surface-alt);
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-sm);
+    padding: 0.55rem 0.65rem;
+    width: 100%;
+}
+
+.field-group textarea {
+    min-height: 5rem;
+    resize: vertical;
+}
+
+.field-group input:focus,
+.field-group select:focus,
+.field-group textarea:focus {
+    border-color: var(--colour-accent);
+}
+
+.field-group p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--colour-muted);
+}
+
+.field-error {
+    color: var(--colour-error) !important;
+}
+
+/* ---- Buttons --------------------------------------------------------------- */
+
+button,
+.button {
+    font: inherit;
+    font-weight: 600;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 0.6rem 1.1rem;
+    cursor: pointer;
+    background: var(--colour-accent);
+    color: #201a10;
+}
+
+button:hover,
+.button:hover {
+    background: var(--colour-accent-dark);
+}
+
+.button--secondary {
+    background: transparent;
+    color: var(--colour-accent-dark);
+    border: 1px solid var(--colour-border);
+}
+
+.button--secondary:hover {
+    border-color: var(--colour-accent);
+    background: var(--colour-surface-alt);
+}
+
+.button--small {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.85rem;
+}
+
+.form-inline {
+    display: inline;
+}
+
+.actions-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* ---- Notices / alerts ------------------------------------------------------- */
+
+.notice {
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius);
+    background: var(--colour-surface-alt);
+    padding: var(--space);
+}
+
+.notice--error {
+    border-color: var(--colour-error);
+    color: var(--colour-error);
+    background: color-mix(in srgb, var(--colour-error) 8%, var(--colour-surface));
+}
+
+.notice--success {
+    border-color: var(--colour-secondary);
+    background: color-mix(in srgb, var(--colour-secondary) 12%, var(--colour-surface));
+}
+
+.notice ul {
+    margin: 0.4rem 0 0;
+    padding-left: 1.2rem;
+}
+
+.muted {
+    color: var(--colour-muted);
+}
+
+/* ---- Badges / pills ---------------------------------------------------------- */
+
+.badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    background: var(--colour-surface-alt);
+    color: var(--colour-muted);
+    border: 1px solid var(--colour-border);
+    white-space: nowrap;
+}
+
+.badge--entry {
+    background: color-mix(in srgb, var(--colour-accent) 18%, var(--colour-surface));
+    color: var(--colour-accent-dark);
+    border-color: var(--colour-accent);
+}
+
+.badge--milestone {
+    background: color-mix(in srgb, var(--colour-secondary) 20%, var(--colour-surface));
+    color: var(--colour-secondary);
+    border-color: var(--colour-secondary);
+}
+
+.badge--category-medication { background: #e7dcf5; color: #5b3d8a; border-color: #b79ee0; }
+.badge--category-relationship { background: #fde0e8; color: #a13a5f; border-color: #f0a8c0; }
+.badge--category-lifestyle { background: #dff0e2; color: #2f6b3f; border-color: #9fd6ac; }
+.badge--category-other { background: var(--colour-surface-alt); color: var(--colour-muted); border-color: var(--colour-border); }
+
+.dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    margin-right: 0.2rem;
+}
+
+.dot--entry { background: var(--colour-accent); }
+.dot--milestone { background: var(--colour-secondary); }
+
+/* ---- List rows (milestones, viewers) ------------------------------------------ */
+
+.item-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.item-row {
+    background: var(--colour-surface);
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius);
+    padding: 0.75rem 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.item-row__main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.item-row__date {
+    font-weight: 600;
+    color: var(--colour-accent-dark);
+}
+
+/* ---- Calendar ------------------------------------------------------------------ */
+
+.calendar-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+}
+
+.calendar-nav__month {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.3rem;
+}
+
+.calendar-cell {
+    background: var(--colour-surface);
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-sm);
+    padding: 0.35rem;
+    min-height: 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    text-decoration: none;
+    color: var(--colour-text);
+}
+
+.calendar-cell:hover {
+    border-color: var(--colour-accent);
+}
+
+.calendar-cell--selected {
+    border-color: var(--colour-accent);
+    background: color-mix(in srgb, var(--colour-accent) 10%, var(--colour-surface));
+}
+
+.calendar-cell__day {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--colour-muted);
+}
+
+.calendar-cell__dots {
+    display: flex;
+    gap: 0.15rem;
+}
+
+/* ---- Trend gauge (summary page) ------------------------------------------------- */
+
+.trend {
+    background: var(--colour-surface-alt);
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-sm);
+    padding: 0.65rem 0.75rem 0.5rem;
+    margin-bottom: 0.9rem;
+}
+
+.trend__label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--colour-muted);
+    margin-bottom: 0.25rem;
+}
+
+.trend-chart {
+    border-radius: var(--radius-sm);
+    background: var(--colour-bg);
+    border: 1px solid var(--colour-border);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    padding: 0.3rem;
+}
+
+.trend-chart__svg {
+    display: block;
+    width: 100%;
+    height: 3.75rem;
+}
+
+.trend-chart__line {
+    fill: none;
+    stroke: var(--colour-accent);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.trend-chart__mean-line {
+    stroke: var(--colour-text);
+    stroke-width: 1;
+    stroke-dasharray: 4 3;
+    opacity: 0.6;
+}
+
+.trend-chart__point {
+    fill: var(--colour-accent-dark);
+    stroke: var(--colour-bg);
+    stroke-width: 1;
+}
+
+.trend__direction {
+    margin-top: 0.3rem;
+}
+
+.badge--direction-improving { background: #dff0e2; color: #2f6b3f; border-color: #9fd6ac; }
+.badge--direction-declining { background: #fde0e0; color: #a13a2f; border-color: #f0a8a0; }
+.badge--direction-stable { background: var(--colour-surface-alt); color: var(--colour-muted); border-color: var(--colour-border); }
+
+.disclaimer {
+    font-size: 0.85rem;
+    color: var(--colour-muted);
+    border-top: 1px dashed var(--colour-border);
+    padding-top: 0.6rem;
+    margin-top: 0.6rem;
+    margin-bottom: 0;
+}
+
+/* ---- Definition lists (calendar entry detail) ----------------------------------- */
+
+dl {
+    margin: 0 0 0.4rem;
+}
+
+dt {
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--colour-muted);
+    text-decoration: underline;
+    margin-top: 0.7rem;
+}
+
+dt:first-of-type {
+    margin-top: 0;
+}
+
+dd {
+    margin: 0.2rem 0 0;
+}
+
+/* ---- AI CBT Therapist's notes --------------------------------------------------- */
+
+.cbt-notes {
+    margin-top: 1rem;
+}
+
+.cbt-notes__divider {
+    border: none;
+    border-top: 1px solid var(--colour-border);
+    margin: 0 0 1rem;
+}
+
+.cbt-notes__heading {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--colour-accent-dark);
+    margin: 0 0 0.85rem;
+}
+
+.cbt-notes__section {
+    background: var(--colour-surface-alt);
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 0.9rem;
+    margin-bottom: 0.6rem;
+}
+
+.cbt-notes__section:last-of-type {
+    margin-bottom: 0;
+}
+
+.cbt-notes__label {
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--colour-muted);
+    text-decoration: underline;
+    margin: 0 0 0.3rem;
+}
+
+.cbt-notes__section p {
+    margin: 0;
+}
+
+.cbt-notes__advice-part {
+    margin-bottom: 0.6rem;
+}
+
+.cbt-notes__advice-part:last-child {
+    margin-bottom: 0;
+}
+
+.cbt-notes__advice-label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--colour-muted);
+    margin: 0 0 0.2rem;
+}
+
+/* ---- Responsive breakpoints ----------------------------------------------------- */
+
+@media (min-width: 600px) {
+    main {
+        padding: 1.5rem;
+        gap: 1.25rem;
+    }
+
+    .app-header__bar {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .card {
+        padding: 1.4rem 1.6rem;
+    }
+
+    .calendar-cell {
+        min-height: 3.75rem;
+        padding: 0.5rem;
+    }
+}
+
+@media (min-width: 900px) {
+    main {
+        max-width: 52rem;
+    }
+
+    .app-header__bar,
+    main {
+        max-width: 52rem;
+    }
+}
+
+/* ---- Login hero ---------------------------------------------------------------
+ * Photo sits above the sign-in form (not beside it), sized to roughly a third
+ * of the hero-image proportions in the reference design: a modest rectangle,
+ * not a full-width banner.
+ */
+
+.login-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    margin-bottom: 1.25rem;
+}
+
+.login-hero__photo {
+    width: 100%;
+    max-width: 9rem;
+    aspect-ratio: 4 / 5;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--colour-border);
+    box-shadow: var(--shadow-card);
+}
+
+.login-hero__photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.login-hero__intro {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.login-hero__greeting {
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    color: var(--colour-text);
+    margin: 0;
+}
+
+.login-hero__name {
+    color: var(--colour-accent-dark);
+    font-weight: 700;
+}
+
+.login-hero__bio {
+    color: var(--colour-muted);
+    max-width: 34rem;
+    margin: 0;
+}
+
+.login-hero__email {
+    color: var(--colour-accent-dark);
+}
+
+.login-hero__email:hover {
+    color: var(--colour-accent);
+}
