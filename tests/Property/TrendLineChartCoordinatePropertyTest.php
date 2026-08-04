@@ -31,10 +31,6 @@ final class TrendLineChartCoordinatePropertyTest extends TestCase
 {
     use TestTrait;
 
-    private const CHART_TOP_Y = 5.0;
-    private const CHART_BOTTOM_Y = 55.0;
-    private const CHART_PLOT_HEIGHT = self::CHART_BOTTOM_Y - self::CHART_TOP_Y;
-
     // Feature: summary-json-payload, Property: the line chart's point coordinates are computed from SharedTrendAxis::positionOf() consistently with the existing axis
     public function testPlottedYCoordinateMatchesSharedTrendAxisPositionInverted(): void
     {
@@ -45,13 +41,20 @@ final class TrendLineChartCoordinatePropertyTest extends TestCase
             ->then(function (array $shape): void {
                 [$scaleMin, $scaleMax, $points] = $shape;
 
+                // Read from the controller rather than restated here: the
+                // property is that the y-coordinate is the shared-axis
+                // fraction inverted across the plot, whatever the plot's
+                // dimensions happen to be.
+                $bottomY = self::chartConstant('CHART_BOTTOM_Y');
+                $plotHeight = self::chartConstant('CHART_PLOT_HEIGHT');
+
                 $coordinates = self::plottedCoordinates($points, $scaleMin, $scaleMax);
 
                 self::assertCount(count($points), $coordinates);
 
                 foreach ($points as $index => $point) {
                     $expectedAxisPosition = SharedTrendAxis::positionOf($point->value(), $scaleMin, $scaleMax);
-                    $expectedY = self::CHART_BOTTOM_Y - ($expectedAxisPosition / 10) * self::CHART_PLOT_HEIGHT;
+                    $expectedY = $bottomY - ($expectedAxisPosition / 10) * $plotHeight;
 
                     self::assertEqualsWithDelta(
                         $expectedY,
@@ -61,6 +64,12 @@ final class TrendLineChartCoordinatePropertyTest extends TestCase
                     );
                 }
             });
+    }
+
+    /** Reads one of SummaryController's private chart geometry constants. */
+    private static function chartConstant(string $name): float
+    {
+        return (float) (new ReflectionClass(SummaryController::class))->getConstant($name);
     }
 
     /** Invokes SummaryController's private plottedCoordinates() via reflection. */

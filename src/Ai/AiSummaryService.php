@@ -36,9 +36,10 @@ use Diary\Support\DateRange;
  *      {@see TrendCalculator} and builds a {@see SummaryInput} relating
  *      milestones to the range, then calls the {@see SummaryProvider};
  *   4. on a {@see ProviderError}, returns
- *      {@see SummaryOutcome::unavailable()} (Requirement 9.5); on success,
- *      returns {@see SummaryOutcome::summary()} carrying the narrative and
- *      the computed metrics.
+ *      {@see SummaryOutcome::unavailable()} with the already-computed metrics
+ *      so charts can still render (Requirement 9.5's unavailable notice remains);
+ *      on success, returns {@see SummaryOutcome::summary()} carrying the
+ *      narrative and the computed metrics.
  */
 final class AiSummaryService
 {
@@ -77,7 +78,7 @@ final class AiSummaryService
         try {
             $summary = $this->provider->generate($input);
         } catch (ProviderError) {
-            return SummaryOutcome::unavailable();
+            return SummaryOutcome::unavailable(SummaryOutcome::UNAVAILABLE_MESSAGE, $metrics);
         }
 
         return SummaryOutcome::summary($summary);

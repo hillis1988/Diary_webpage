@@ -195,6 +195,8 @@ final class AiSummaryServiceTest extends TestCase
         $outcome = $this->service($provider)->summarise($owner, $this->range('2025-03-01', '2025-03-31'));
 
         self::assertTrue($outcome->isUnavailable());
+        self::assertNotNull($outcome->metrics());
+        self::assertSame(4, $outcome->metrics()->entryCount());
         self::assertSame(1, $provider->callCount());
     }
 

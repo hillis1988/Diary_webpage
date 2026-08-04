@@ -264,5 +264,7 @@ final class SummaryControllerTest extends TestCase
         $html = $response->body();
         self::assertStringContainsString(\Diary\Ai\SummaryOutcome::UNAVAILABLE_MESSAGE, $html);
         self::assertStringContainsString('disclaimer', $html);
+        self::assertStringContainsString('trend-panel', $html);
+        self::assertStringContainsString('Mood rating', $html);
     }
 }

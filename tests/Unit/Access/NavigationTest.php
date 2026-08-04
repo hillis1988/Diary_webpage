@@ -40,7 +40,7 @@ final class NavigationTest extends TestCase
         $items = $this->access->navigationFor($this->contextFor(UserRole::Owner));
 
         self::assertSame(
-            ['Diary entry', 'Calendar', 'Summary', 'Milestones', 'Viewers'],
+            ['Diary entry', 'Calendar', 'Summary', 'Bright spots', 'Milestones', 'Viewers'],
             array_map(static fn ($item) => $item->label, $items)
         );
     }
@@ -50,7 +50,7 @@ final class NavigationTest extends TestCase
         $items = $this->access->navigationFor($this->contextFor(UserRole::Viewer));
 
         self::assertSame(
-            ['Calendar', 'Summary'],
+            ['Calendar', 'Summary', 'Bright spots'],
             array_map(static fn ($item) => $item->label, $items)
         );
     }

@@ -27,6 +27,10 @@
     </source>
 
     <php>
+        <!-- The property suite generates tens of thousands of cases per run and
+             does not fit in PHP's default 128M. -->
+        <ini name="memory_limit" value="1G"/>
+
         <!-- Integration tests connect to a throwaway MariaDB schema; never point these at production. -->
         <env name="DIARY_TEST_DB_HOST" value="127.0.0.1"/>
         <env name="DIARY_TEST_DB_PORT" value="3306"/>

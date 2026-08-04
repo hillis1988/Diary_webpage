@@ -66,8 +66,13 @@ final class HomePageController
         'Diary entry' => '📔',
         'Calendar' => '📅',
         'Summary' => '📊',
+        'Bright spots' => '✨',
         'Milestones' => '🏆',
         'Viewers' => '👥',
+    ];
+
+    private const FEATURED_NAV_LABELS = [
+        'Bright spots' => true,
     ];
 
     public static function render(array $navigation, ?string $signOutCsrfToken = null): string
@@ -78,7 +83,8 @@ final class HomePageController
         foreach ($navigation as $item) {
             $icon = self::NAV_ICONS[$item->label] ?? null;
             $safeIcon = $icon !== null ? '<span class="nav-grid__icon" aria-hidden="true">' . $icon . '</span> ' : '';
-            $links .= '                    <li><a class="nav-grid__link" href="' . htmlspecialchars($item->path, ENT_QUOTES, 'UTF-8') . '">'
+            $featuredClass = isset(self::FEATURED_NAV_LABELS[$item->label]) ? ' nav-grid__link--featured' : '';
+            $links .= '                    <li><a class="nav-grid__link' . $featuredClass . '" href="' . htmlspecialchars($item->path, ENT_QUOTES, 'UTF-8') . '">'
                 . $safeIcon . htmlspecialchars($item->label, ENT_QUOTES, 'UTF-8') . '</a></li>' . "\n";
         }
 
@@ -100,6 +106,10 @@ final class HomePageController
             . '        </div>' . "\n"
             . '    </header>' . "\n"
             . '    <main id="main">' . "\n"
+            . '        <div class="card card--spotlight home-intro">' . "\n"
+            . '            <p class="home-intro__eyebrow">Your private space</p>' . "\n"
+            . '            <p class="home-intro__lead">Write the day, notice the patterns, and revisit the moments worth holding onto.</p>' . "\n"
+            . '        </div>' . "\n"
             . '        <div class="card">' . "\n"
             . '            <nav aria-label="Main">' . "\n"
             . '                <ul class="nav-grid">' . "\n"

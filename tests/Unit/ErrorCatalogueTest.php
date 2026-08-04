@@ -145,7 +145,10 @@ final class ErrorCatalogueTest extends TestCase
     /** Requirement 9.5. */
     public function testSummaryUnavailable(): void
     {
-        self::assertSame('The summary is temporarily unavailable', SummaryOutcome::UNAVAILABLE_MESSAGE);
+        self::assertSame(
+            'The written summary is temporarily unavailable. Your trend charts below are still based on your diary entries.',
+            SummaryOutcome::UNAVAILABLE_MESSAGE
+        );
         self::assertSame(SummaryOutcome::UNAVAILABLE_MESSAGE, SummaryOutcome::unavailable()->reason());
     }
 

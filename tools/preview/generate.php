@@ -25,11 +25,15 @@ use Diary\Access\OwnerId;
 use Diary\Ai\CbtAdvice;
 use Diary\Ai\CbtRecommendation;
 use Diary\Ai\FeedbackOutcome;
+use Diary\Ai\PositiveHighlight;
+use Diary\Ai\PositivesOutcome;
+use Diary\Ai\PositivesReminder;
 use Diary\Ai\ProgressSummary;
 use Diary\Ai\SeriesStats;
 use Diary\Ai\SummaryOutcome;
 use Diary\Ai\TrendDirection;
 use Diary\Ai\TrendMetrics;
+use Diary\Ai\TrendPoint;
 use Diary\Auth\UserAccount;
 use Diary\Auth\UserId;
 use Diary\Auth\UserRole;
@@ -46,6 +50,7 @@ use Diary\Http\DiaryEntryController;
 use Diary\Http\HomePageController;
 use Diary\Http\LoginController;
 use Diary\Http\MilestoneController;
+use Diary\Http\PositivesController;
 use Diary\Http\RegistrationController;
 use Diary\Http\Router;
 use Diary\Http\StatusPage;
@@ -99,12 +104,14 @@ try {
         new NavigationItem('Diary entry', '/diary'),
         new NavigationItem('Calendar', '/calendar'),
         new NavigationItem('Summary', '/summary'),
+        new NavigationItem('Bright spots', '/bright-spots'),
         new NavigationItem('Milestones', '/milestones'),
         new NavigationItem('Viewers', '/viewers'),
     ];
     $viewerNavigation = [
         new NavigationItem('Calendar', '/calendar'),
         new NavigationItem('Summary', '/summary'),
+        new NavigationItem('Bright spots', '/bright-spots'),
     ];
 
     $write('home-owner.html', HomePageController::render($ownerNavigation, 'preview-csrf-token'));
@@ -216,6 +223,15 @@ try {
     $calendarHtml = $calendarRenderMethod->invoke(null, $calendarMonth, $selectedDate, $detail);
     $write('calendar.html', $calendarHtml);
 
+    // A day with no entry on it.
+    $emptyDate = LocalDate::of(2025, 6, 9);
+    $write('calendar-no-entry.html', $calendarRenderMethod->invoke(
+        null,
+        $calendarMonth,
+        $emptyDate,
+        $calendarDetailMethod->invoke(null, null, $emptyDate),
+    ));
+
     // ---------------------------------------------------------------------
     // 4. Summary page
     // ---------------------------------------------------------------------
@@ -231,14 +247,66 @@ try {
         ),
         TrendMetrics::of(
             12,
-            SeriesStats::of(12, 6.8, 3, 9, TrendDirection::Improving),
-            SeriesStats::of(10, 3.4, 2, 5, TrendDirection::Stable),
+            SeriesStats::of(12, 6.8, 3, 9, TrendDirection::Improving, [
+                new TrendPoint(LocalDate::of(2025, 5, 2), 4),
+                new TrendPoint(LocalDate::of(2025, 5, 5), 5),
+                new TrendPoint(LocalDate::of(2025, 5, 9), 6),
+                new TrendPoint(LocalDate::of(2025, 5, 12), 5),
+                new TrendPoint(LocalDate::of(2025, 5, 16), 7),
+                new TrendPoint(LocalDate::of(2025, 5, 20), 7),
+                new TrendPoint(LocalDate::of(2025, 5, 24), 8),
+                new TrendPoint(LocalDate::of(2025, 5, 28), 8),
+                new TrendPoint(LocalDate::of(2025, 6, 1), 9),
+            ]),
+            SeriesStats::of(10, 3.4, 2, 5, TrendDirection::Stable, [
+                new TrendPoint(LocalDate::of(2025, 5, 2), 2),
+                new TrendPoint(LocalDate::of(2025, 5, 5), 3),
+                new TrendPoint(LocalDate::of(2025, 5, 9), 3),
+                new TrendPoint(LocalDate::of(2025, 5, 12), 4),
+                new TrendPoint(LocalDate::of(2025, 5, 16), 3),
+                new TrendPoint(LocalDate::of(2025, 5, 20), 4),
+                new TrendPoint(LocalDate::of(2025, 5, 24), 3),
+                new TrendPoint(LocalDate::of(2025, 5, 28), 4),
+                new TrendPoint(LocalDate::of(2025, 6, 1), 5),
+            ]),
         ),
     ));
     $write('summary-with-metrics.html', SummaryController::render($summaryRange, $summaryWithMetrics));
     $write('summary-insufficient-data.html', SummaryController::render($summaryRange, SummaryOutcome::insufficientData()));
     $write('summary-unavailable.html', SummaryController::render($summaryRange, SummaryOutcome::unavailable()));
     $write('summary-picker-only.html', SummaryController::render($summaryRange, null));
+
+    // ---------------------------------------------------------------------
+    // 4b. Bright spots page
+    // ---------------------------------------------------------------------
+    $brightSpotsRange = DateRange::of(LocalDate::of(2025, 3, 1), LocalDate::of(2025, 6, 1));
+    $brightSpotsReminder = new PositivesReminder(
+        'Hey — looking back over these months, there is a lot here to be proud of.',
+        'You kept showing up for yourself in small, real ways. That stacks up. Keep collecting moments like these; they are proof you can do hard things and still make room for care.',
+        [
+            new PositiveHighlight(
+                '2025-04-12',
+                'You went for that walk anyway',
+                'Even on a low-energy day you got outside. That is not nothing — it is you choosing a little bit of care when it would have been easier not to.',
+                'Next time the sofa wins the argument first, try the same five-minute walk. You have already shown yourself it helps.',
+            ),
+            new PositiveHighlight(
+                '2025-05-03',
+                'An honest conversation',
+                'You named how you felt to someone you trust. That takes guts, and it usually makes the load feel shared rather than carried alone.',
+                'Keep practising that honesty in small doses — a text, a check-in, one true sentence.',
+            ),
+            new PositiveHighlight(
+                '2025-05-28',
+                'Steadier sleep showed up',
+                'Your entries show sleep evening out. Rest is easy to overlook when life is busy, but it quietly makes everything else more doable.',
+                'Protect one wind-down habit this week — same time, same cue — and notice how mornings feel.',
+            ),
+        ],
+    );
+    $write('bright-spots.html', PositivesController::render($brightSpotsRange, PositivesOutcome::reminder($brightSpotsReminder)));
+    $write('bright-spots-empty.html', PositivesController::render($brightSpotsRange, PositivesOutcome::insufficientData()));
+    $write('bright-spots-picker.html', PositivesController::render($brightSpotsRange, null));
 
     // ---------------------------------------------------------------------
     // 5. Milestones list

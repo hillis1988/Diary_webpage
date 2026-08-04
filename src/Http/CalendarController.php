@@ -14,6 +14,8 @@ use Diary\Diary\CalendarMonth;
 use Diary\Diary\CalendarService;
 use Diary\Diary\DiaryEntry;
 use Diary\Diary\DiaryService;
+use Diary\Diary\QuestionDefinition;
+use Diary\Diary\QuestionSet;
 use Diary\Support\Clock;
 use Diary\Support\LocalDate;
 use Diary\Support\Operation;
@@ -179,7 +181,11 @@ final class CalendarController
 
     private static function renderMonthNav(YearMonth $month): string
     {
-        $safeMonth = htmlspecialchars($month->toIso(), ENT_QUOTES, 'UTF-8');
+        $safeMonth = htmlspecialchars(
+            $month->firstDay()->toDateTimeImmutable()->format('F Y'),
+            ENT_QUOTES,
+            'UTF-8'
+        );
         $previousLink = self::monthLink($month->previous());
         $nextLink = self::monthLink($month->next());
 
@@ -254,41 +260,116 @@ final class CalendarController
      */
     private static function renderDateDetail(?array $entryDetail, LocalDate $selectedDate): string
     {
-        $safeDate = htmlspecialchars($selectedDate->toIso(), ENT_QUOTES, 'UTF-8');
+        $heading = '            <p class="day-detail__eyebrow">' . ($entryDetail === null ? 'Selected day' : 'Diary entry') . '</p>' . "\n"
+            . '            <h2 id="date-detail-heading" class="day-detail__date">' . self::longDate($selectedDate) . '</h2>' . "\n";
 
         if ($entryDetail === null) {
             $safeMessage = htmlspecialchars(self::NO_ENTRY_MESSAGE, ENT_QUOTES, 'UTF-8');
 
-            return '        <section class="card" aria-labelledby="date-detail-heading">' . "\n"
-                . '            <h2 id="date-detail-heading">' . $safeDate . '</h2>' . "\n"
-                . '            <p>' . $safeMessage . '</p>' . "\n"
+            return '        <section class="card day-detail day-detail--empty" aria-labelledby="date-detail-heading">' . "\n"
+                . $heading
+                . '            <p class="day-detail__empty-message">' . $safeMessage . '</p>' . "\n"
                 . '        </section>' . "\n";
         }
 
         [$entry, $recommendation] = $entryDetail;
 
-        return '        <section class="card" aria-labelledby="date-detail-heading">' . "\n"
-            . '            <h2 id="date-detail-heading">' . $safeDate . '</h2>' . "\n"
+        return '        <section class="card card--spotlight day-detail" aria-labelledby="date-detail-heading">' . "\n"
+            . $heading
             . self::renderEntry($entry)
             . self::renderRecommendation($recommendation)
             . '        </section>' . "\n";
     }
 
+    /** e.g. "Sunday 1 June 2025" - how the day reads, not how it is stored. */
+    private static function longDate(LocalDate $date): string
+    {
+        return htmlspecialchars($date->toDateTimeImmutable()->format('l j F Y'), ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * The day's answers, driven off {@see QuestionSet} rather than a fixed
+     * list, so this page cannot drift from the questions the entry form asks:
+     * the ratings become score cards, and each written answer its own card.
+     */
     private static function renderEntry(DiaryEntry $entry): string
     {
         $input = $entry->input();
-        $safeEvents = htmlspecialchars($input->events(), ENT_QUOTES, 'UTF-8');
-        $safeThoughts = htmlspecialchars($input->thoughts(), ENT_QUOTES, 'UTF-8');
-        $safeEmotions = htmlspecialchars($input->emotions(), ENT_QUOTES, 'UTF-8');
-        $sleepQuality = $input->sleepQuality();
+        $scores = '';
+        $answers = '';
 
-        return '            <dl>' . "\n"
-            . '                <dt>Mood rating</dt><dd>' . $input->moodRating() . '</dd>' . "\n"
-            . '                <dt>Sleep quality</dt><dd>' . ($sleepQuality !== null ? $sleepQuality : '') . '</dd>' . "\n"
-            . '                <dt>Notable events</dt><dd>' . $safeEvents . '</dd>' . "\n"
-            . '                <dt>Thoughts</dt><dd>' . $safeThoughts . '</dd>' . "\n"
-            . '                <dt>Emotions</dt><dd>' . $safeEmotions . '</dd>' . "\n"
-            . '            </dl>' . "\n";
+        foreach (QuestionSet::definitions() as $question) {
+            $value = $input->answer($question->field());
+
+            if ($question->isScale()) {
+                $scores .= self::renderScoreCard($question, is_int($value) ? $value : null);
+
+                continue;
+            }
+
+            $answers .= self::renderAnswerCard($question, is_string($value) ? $value : '');
+        }
+
+        return '            <div class="day-scores">' . "\n" . $scores . '            </div>' . "\n"
+            . '            <div class="day-answers">' . "\n" . $answers . '            </div>' . "\n";
+    }
+
+    /**
+     * One rating, shown as its number against the scale it was given on, with
+     * a meter for the shape of it at a glance. The meter's fill is a class
+     * rather than an inline style: the Content-Security-Policy allows no
+     * inline styles.
+     */
+    private static function renderScoreCard(QuestionDefinition $question, ?int $value): string
+    {
+        $safeLabel = htmlspecialchars($question->label(), ENT_QUOTES, 'UTF-8');
+        $max = (int) $question->scaleMax();
+
+        if ($value === null) {
+            return '                <div class="day-score day-score--unanswered">' . "\n"
+                . '                    <p class="day-score__label">' . $safeLabel . '</p>' . "\n"
+                . '                    <p class="day-score__value">&ndash;</p>' . "\n"
+                . '                    <p class="day-score__word">Not answered</p>' . "\n"
+                . '                </div>' . "\n";
+        }
+
+        $percent = (int) round($value / $max * 10) * 10;
+        $scaleLabels = $question->scaleLabels();
+        // Only the points that carry a word of their own show one, so a 1-10
+        // mood does not caption a 7 with "7".
+        $word = isset($scaleLabels[$value])
+            ? '                    <p class="day-score__word">' . htmlspecialchars($scaleLabels[$value], ENT_QUOTES, 'UTF-8') . '</p>' . "\n"
+            : '';
+
+        return '                <div class="day-score">' . "\n"
+            . '                    <p class="day-score__label">' . $safeLabel . '</p>' . "\n"
+            . '                    <p class="day-score__value">' . $value
+            . '<span class="day-score__max"> / ' . $max . '</span></p>' . "\n"
+            . '                    <div class="day-score__meter">' . "\n"
+            . '                        <span class="day-score__fill day-score__fill--' . $percent . '"></span>' . "\n"
+            . '                    </div>' . "\n"
+            . $word
+            . '                </div>' . "\n";
+    }
+
+    /**
+     * One written answer, headed by the question that was asked rather than
+     * the field's short name, so the day reads back the way it was written.
+     */
+    private static function renderAnswerCard(QuestionDefinition $question, string $value): string
+    {
+        $safeLabel = htmlspecialchars($question->label(), ENT_QUOTES, 'UTF-8');
+        $safePrompt = htmlspecialchars($question->prompt(), ENT_QUOTES, 'UTF-8');
+
+        $body = $value === ''
+            ? '                    <p class="day-answer__text day-answer__text--blank">Nothing written for this one.</p>' . "\n"
+            : '                    <p class="day-answer__text">' . htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . '</p>' . "\n";
+
+        return '                <article class="day-answer">' . "\n"
+            . '                    <h3 class="day-answer__label">' . $safeLabel . '</h3>' . "\n"
+            . '                    <p class="day-answer__prompt">' . $safePrompt . '</p>' . "\n"
+            . $body
+            . '                </article>' . "\n";
     }
 
     private static function renderRecommendation(?CbtRecommendationRecord $recommendation): string

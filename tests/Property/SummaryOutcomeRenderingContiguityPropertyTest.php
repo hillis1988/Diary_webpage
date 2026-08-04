@@ -71,7 +71,7 @@ final class SummaryOutcomeRenderingContiguityPropertyTest extends TestCase
                 $html = SummaryController::render($range, $outcome);
 
                 $notesPos = strpos($html, 'class="cbt-notes"');
-                $metricsPos = strpos($html, '<dt>Entries considered</dt>');
+                $metricsPos = strpos($html, '<p class="summary-metrics__count"');
                 $disclaimerPos = strpos($html, '<p class="disclaimer"');
 
                 self::assertNotFalse($notesPos, 'The CBT_Notes_Card must render');
@@ -83,17 +83,15 @@ final class SummaryOutcomeRenderingContiguityPropertyTest extends TestCase
                     'The notes card, metrics, and disclaimer must appear in that order'
                 );
 
-                // Nothing but whitespace between the notes card's closing
-                // tag and the metrics' opening <dl>.
-                $firstDlPos = strpos($html, '<dl>');
-                self::assertNotFalse($firstDlPos);
-                $beforeDl = substr($html, 0, $firstDlPos);
-                $lastDivClosePos = strrpos($beforeDl, '</div>');
+                // Nothing but whitespace between the notes card's closing tag
+                // and the metrics' opening entry count.
+                $beforeMetrics = substr($html, 0, $metricsPos);
+                $lastDivClosePos = strrpos($beforeMetrics, '</div>');
                 self::assertNotFalse($lastDivClosePos, 'The notes card must close with a </div> before the metrics');
                 $gapBeforeMetrics = substr(
                     $html,
                     $lastDivClosePos + strlen('</div>'),
-                    $firstDlPos - ($lastDivClosePos + strlen('</div>'))
+                    $metricsPos - ($lastDivClosePos + strlen('</div>'))
                 );
                 self::assertSame(
                     '',
@@ -101,15 +99,15 @@ final class SummaryOutcomeRenderingContiguityPropertyTest extends TestCase
                     'Nothing but whitespace may sit between the notes card and the metrics'
                 );
 
-                // Nothing but whitespace between the metrics' last closing
-                // </dl> and the disclaimer's opening <p>.
+                // Nothing but whitespace between the last trend panel's
+                // closing </section> and the disclaimer's opening <p>.
                 $beforeDisclaimer = substr($html, 0, $disclaimerPos);
-                $lastDlClosePos = strrpos($beforeDisclaimer, '</dl>');
-                self::assertNotFalse($lastDlClosePos, 'The metrics must close with a </dl> before the disclaimer');
+                $lastPanelClosePos = strrpos($beforeDisclaimer, '</section>');
+                self::assertNotFalse($lastPanelClosePos, 'The metrics must close with a </section> before the disclaimer');
                 $gapBeforeDisclaimer = substr(
                     $html,
-                    $lastDlClosePos + strlen('</dl>'),
-                    $disclaimerPos - ($lastDlClosePos + strlen('</dl>'))
+                    $lastPanelClosePos + strlen('</section>'),
+                    $disclaimerPos - ($lastPanelClosePos + strlen('</section>'))
                 );
                 self::assertSame(
                     '',
@@ -162,7 +160,7 @@ final class SummaryOutcomeRenderingContiguityPropertyTest extends TestCase
                     'No CBT_Notes_Card markup may render for a non-summary outcome'
                 );
                 self::assertStringNotContainsString(
-                    '<dt>Entries considered</dt>',
+                    'class="summary-metrics__count"',
                     $html,
                     'No trend metrics markup may render for a non-summary outcome'
                 );
@@ -170,6 +168,11 @@ final class SummaryOutcomeRenderingContiguityPropertyTest extends TestCase
                     'class="trend"',
                     $html,
                     'No trend-bar markup may render for a non-summary outcome'
+                );
+                self::assertStringNotContainsString(
+                    'class="trend-panel"',
+                    $html,
+                    'No trend panel markup may render for a non-summary outcome'
                 );
             });
     }

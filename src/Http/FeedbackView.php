@@ -58,7 +58,7 @@ final class FeedbackView
             ? self::renderRecommendation($outcome)
             : self::renderUnavailable($outcome, $retryAction, $retryHiddenFields, $csrfFieldName, $csrfToken);
 
-        return '        <div class="ai-feedback card">' . "\n"
+        return '        <div class="ai-feedback card card--spotlight">' . "\n"
             . $body
             . self::renderDisclaimer()
             . '        </div>' . "\n";

@@ -52,17 +52,19 @@ final class SummaryController
     private const DEFAULT_RANGE_DAYS = 30;
 
     /**
-     * The Trend_Line_Chart's fixed SVG coordinate space (`viewBox="0 0 300
-     * 60"`): a left/right plotting margin so points near the ends of the
-     * date range are not clipped by their circle markers, and a top/bottom
-     * margin for the same reason on the value axis.
+     * The Trend_Line_Chart's fixed SVG coordinate space (`viewBox="0 0 360
+     * 160"`): room on the left for scale labels, margins so point markers
+     * are not clipped, and space under the plot for date labels.
      */
-    private const CHART_LEFT_X = 10.0;
-    private const CHART_RIGHT_X = 290.0;
-    private const CHART_CENTER_X = 150.0;
-    private const CHART_TOP_Y = 5.0;
-    private const CHART_BOTTOM_Y = 55.0;
+    private const CHART_VIEW_WIDTH = 360.0;
+    private const CHART_VIEW_HEIGHT = 160.0;
+    private const CHART_LEFT_X = 36.0;
+    private const CHART_RIGHT_X = 348.0;
+    private const CHART_CENTER_X = 192.0;
+    private const CHART_TOP_Y = 12.0;
+    private const CHART_BOTTOM_Y = 118.0;
     private const CHART_PLOT_HEIGHT = self::CHART_BOTTOM_Y - self::CHART_TOP_Y;
+    private const CHART_LABEL_Y = 138.0;
 
     public function __construct(
         private readonly AccessControlService $access,
@@ -210,13 +212,25 @@ final class SummaryController
         $body = match (true) {
             $outcome->isSummary() => self::renderSummary($outcome),
             $outcome->isInsufficientData() => self::renderMessage($outcome->reason() ?? SummaryOutcome::INSUFFICIENT_DATA_MESSAGE),
-            default => self::renderMessage($outcome->reason() ?? SummaryOutcome::UNAVAILABLE_MESSAGE),
+            default => self::renderUnavailable($outcome),
         };
 
-        return '        <div class="ai-summary card">' . "\n"
+        return '        <div class="ai-summary card card--spotlight">' . "\n"
             . $body
             . FeedbackView::renderDisclaimer()
             . '        </div>' . "\n";
+    }
+
+    private static function renderUnavailable(SummaryOutcome $outcome): string
+    {
+        $html = self::renderMessage($outcome->reason() ?? SummaryOutcome::UNAVAILABLE_MESSAGE);
+        $metrics = $outcome->metrics();
+
+        if ($metrics !== null) {
+            $html .= self::renderMetrics($metrics);
+        }
+
+        return $html;
     }
 
     private static function renderSummary(SummaryOutcome $outcome): string
@@ -302,44 +316,58 @@ final class SummaryController
 
     private static function renderMetrics(TrendMetrics $metrics): string
     {
-        return '            <dl>' . "\n"
-            . '                <dt>Entries considered</dt><dd>' . $metrics->entryCount() . '</dd>' . "\n"
-            . '            </dl>' . "\n"
+        return '            <p class="summary-metrics__count">Entries considered: <strong>'
+            . $metrics->entryCount() . '</strong></p>' . "\n"
             . self::renderSeries('Mood rating', $metrics->mood(), QuestionSet::MOOD_MIN, QuestionSet::MOOD_MAX)
             . self::renderSeries('Sleep quality', $metrics->sleep(), QuestionSet::SLEEP_MIN, QuestionSet::SLEEP_MAX);
     }
 
     /**
-     * The series' existing numeric breakdown (unchanged), plus a min-max
-     * range bar with the mean marked and a direction badge - both derived
-     * purely from what {@see SeriesStats} already exposes, positioned as
-     * percentages of the question's fixed scale ($scaleMin-$scaleMax).
+     * A spotlight panel per series: titled chart, direction badge, and a
+     * compact stats grid derived from what {@see SeriesStats} already exposes.
      */
     private static function renderSeries(string $label, SeriesStats $stats, int $scaleMin, int $scaleMax): string
     {
         $safeLabel = htmlspecialchars($label, ENT_QUOTES, 'UTF-8');
-        $safeDirection = htmlspecialchars(self::directionLabel($stats->direction()), ENT_QUOTES, 'UTF-8');
+        $chart = self::renderLineChart($stats, $scaleMin, $scaleMax);
+        $directionBadge = '';
 
-        return '            <h2>' . $safeLabel . '</h2>' . "\n"
-            . self::renderLineChart($stats, $scaleMin, $scaleMax)
-            . '            <dl>' . "\n"
-            . '                <dt>Count</dt><dd>' . $stats->count() . '</dd>' . "\n"
-            . '                <dt>Mean</dt><dd>' . self::formatNullableScaledNumber($stats->mean(), $scaleMax) . '</dd>' . "\n"
-            . '                <dt>Minimum</dt><dd>' . self::formatNullableScaledNumber($stats->min(), $scaleMax) . '</dd>' . "\n"
-            . '                <dt>Maximum</dt><dd>' . self::formatNullableScaledNumber($stats->max(), $scaleMax) . '</dd>' . "\n"
-            . '                <dt>Direction</dt><dd>' . $safeDirection . '</dd>' . "\n"
-            . '            </dl>' . "\n";
+        if ($chart !== '') {
+            $safeDirection = htmlspecialchars(self::directionLabel($stats->direction()), ENT_QUOTES, 'UTF-8');
+            $directionValue = htmlspecialchars($stats->direction()->value, ENT_QUOTES, 'UTF-8');
+            $directionBadge = '                    <span class="badge badge--direction-' . $directionValue . '">' . $safeDirection . '</span>' . "\n";
+        }
+
+        return '            <section class="trend-panel">' . "\n"
+            . '                <div class="trend-panel__header">' . "\n"
+            . '                    <h2 class="trend-panel__title">' . $safeLabel . '</h2>' . "\n"
+            . $directionBadge
+            . '                </div>' . "\n"
+            . $chart
+            . '                <div class="trend-panel__stats">' . "\n"
+            . self::renderTrendStat('Count', (string) $stats->count())
+            . self::renderTrendStat('Mean', self::formatNullableScaledNumber($stats->mean(), $scaleMax))
+            . self::renderTrendStat('Minimum', self::formatNullableScaledNumber($stats->min(), $scaleMax))
+            . self::renderTrendStat('Maximum', self::formatNullableScaledNumber($stats->max(), $scaleMax))
+            . '                </div>' . "\n"
+            . '            </section>' . "\n";
+    }
+
+    private static function renderTrendStat(string $label, string $value): string
+    {
+        $safeLabel = htmlspecialchars($label, ENT_QUOTES, 'UTF-8');
+        $safeValue = htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+        return '                    <div class="trend-stat">' . "\n"
+            . '                        <span class="trend-stat__label">' . $safeLabel . '</span>' . "\n"
+            . '                        <span class="trend-stat__value">' . $safeValue . '</span>' . "\n"
+            . '                    </div>' . "\n";
     }
 
     /**
-     * A `.trend` card containing a `.trend-chart` inline SVG line chart: one
-     * `.trend-chart__point` circle plus connecting `.trend-chart__line`
-     * polyline per {@see TrendPoint} (x = the point's date position within
-     * the plotted range, y = {@see SharedTrendAxis::positionOf()} inverted
-     * for SVG's downward-growing y axis), a dashed `.trend-chart__mean-line`
-     * at the mean's shared-axis position, and a `.badge--direction-*`
-     * naming the direction - rendered only when there is at least one point
-     * in the series, since an empty series has nothing to plot.
+     * A `.trend-chart` inline SVG: grid, scale labels, area fill under the
+     * line, mean guide, polyline + point markers, and end-date labels.
+     * Rendered only when there is at least one point to plot.
      */
     private static function renderLineChart(SeriesStats $stats, int $scaleMin, int $scaleMax): string
     {
@@ -352,27 +380,120 @@ final class SummaryController
             return '';
         }
 
-        $directionValue = htmlspecialchars($stats->direction()->value, ENT_QUOTES, 'UTF-8');
         $safeDirectionLabel = htmlspecialchars(self::directionLabel($stats->direction()), ENT_QUOTES, 'UTF-8');
-
         $meanY = self::formatCoordinate(self::valueToY($mean, $scaleMin, $scaleMax));
+        $gradientId = 'trendAreaFill-' . $scaleMin . '-' . $scaleMax;
 
-        return '            <div class="trend">' . "\n"
-            . '                <div class="trend__label">' . "\n"
-            . '                    <span>' . self::formatNullableScaledNumber($min, $scaleMax) . '</span>' . "\n"
-            . '                    <span>' . self::formatNullableScaledNumber($max, $scaleMax) . '</span>' . "\n"
-            . '                </div>' . "\n"
-            . '                <div class="trend-chart">' . "\n"
-            . '                    <svg class="trend-chart__svg" viewBox="0 0 300 60" preserveAspectRatio="none" role="img" aria-label="' . $safeDirectionLabel . '">' . "\n"
-            . '                        <line class="trend-chart__mean-line" x1="' . self::formatCoordinate(self::CHART_LEFT_X) . '" y1="' . $meanY . '" x2="' . self::formatCoordinate(self::CHART_RIGHT_X) . '" y2="' . $meanY . '"></line>' . "\n"
+        return '                <div class="trend">' . "\n"
+            . '                    <div class="trend__label">' . "\n"
+            . '                        <span>Low ' . self::formatNullableScaledNumber($min, $scaleMax) . '</span>' . "\n"
+            . '                        <span>High ' . self::formatNullableScaledNumber($max, $scaleMax) . '</span>' . "\n"
+            . '                    </div>' . "\n"
+            . '                    <div class="trend-chart">' . "\n"
+            . '                        <svg class="trend-chart__svg" viewBox="0 0 '
+            . self::formatCoordinate(self::CHART_VIEW_WIDTH) . ' '
+            . self::formatCoordinate(self::CHART_VIEW_HEIGHT)
+            . '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="' . $safeDirectionLabel . '">' . "\n"
+            . '                            <defs>' . "\n"
+            . '                                <linearGradient id="' . $gradientId . '" x1="0" y1="0" x2="0" y2="1">' . "\n"
+            . '                                    <stop offset="0%" stop-color="#e0a526" stop-opacity="0.45"></stop>' . "\n"
+            . '                                    <stop offset="100%" stop-color="#e0a526" stop-opacity="0.02"></stop>' . "\n"
+            . '                                </linearGradient>' . "\n"
+            . '                            </defs>' . "\n"
+            . self::renderChartGrid($scaleMin, $scaleMax)
+            . '                            <line class="trend-chart__mean-line" x1="' . self::formatCoordinate(self::CHART_LEFT_X) . '" y1="' . $meanY . '" x2="' . self::formatCoordinate(self::CHART_RIGHT_X) . '" y2="' . $meanY . '"></line>' . "\n"
+            . self::renderArea($points, $scaleMin, $scaleMax, $gradientId)
             . self::renderPolyline($points, $scaleMin, $scaleMax)
             . self::renderPointMarkers($points, $scaleMin, $scaleMax)
-            . '                    </svg>' . "\n"
-            . '                </div>' . "\n"
-            . '                <div class="trend__direction">' . "\n"
-            . '                    <span class="badge badge--direction-' . $directionValue . '">' . $safeDirectionLabel . '</span>' . "\n"
-            . '                </div>' . "\n"
-            . '            </div>' . "\n";
+            . self::renderDateLabels($points, $scaleMin, $scaleMax)
+            . '                        </svg>' . "\n"
+            . '                    </div>' . "\n"
+            . '                </div>' . "\n";
+    }
+
+    private static function renderChartGrid(int $scaleMin, int $scaleMax): string
+    {
+        $html = '';
+        $ticks = 4;
+
+        for ($i = 0; $i <= $ticks; $i++) {
+            $ratio = $i / $ticks;
+            $value = $scaleMin + ($scaleMax - $scaleMin) * (1 - $ratio);
+            $y = self::CHART_TOP_Y + self::CHART_PLOT_HEIGHT * $ratio;
+            $yFormatted = self::formatCoordinate($y);
+            $label = htmlspecialchars(self::formatNullableScaledNumber($value, $scaleMax), ENT_QUOTES, 'UTF-8');
+
+            $html .= '                            <line class="trend-chart__grid" x1="'
+                . self::formatCoordinate(self::CHART_LEFT_X) . '" y1="' . $yFormatted . '" x2="'
+                . self::formatCoordinate(self::CHART_RIGHT_X) . '" y2="' . $yFormatted . '"></line>' . "\n";
+            $html .= '                            <text class="trend-chart__axis-label" x="'
+                . self::formatCoordinate(self::CHART_LEFT_X - 4) . '" y="'
+                . self::formatCoordinate($y + 3) . '" text-anchor="end">' . $label . '</text>' . "\n";
+        }
+
+        return $html;
+    }
+
+    /**
+     * @param list<TrendPoint> $points
+     */
+    private static function renderArea(array $points, int $scaleMin, int $scaleMax, string $gradientId): string
+    {
+        $coordinates = self::plottedCoordinates($points, $scaleMin, $scaleMax);
+
+        if ($coordinates === []) {
+            return '';
+        }
+
+        $path = [];
+        foreach ($coordinates as [$x, $y]) {
+            $path[] = self::formatCoordinate($x) . ',' . self::formatCoordinate($y);
+        }
+
+        $firstX = self::formatCoordinate($coordinates[0][0]);
+        $lastX = self::formatCoordinate($coordinates[array_key_last($coordinates)][0]);
+        $baseY = self::formatCoordinate(self::CHART_BOTTOM_Y);
+        $safeGradientId = htmlspecialchars($gradientId, ENT_QUOTES, 'UTF-8');
+
+        return '                            <polygon class="trend-chart__area" fill="url(#' . $safeGradientId . ')" points="'
+            . $firstX . ',' . $baseY . ' ' . implode(' ', $path) . ' ' . $lastX . ',' . $baseY
+            . '"></polygon>' . "\n";
+    }
+
+    /**
+     * @param list<TrendPoint> $points
+     */
+    private static function renderDateLabels(array $points, int $scaleMin, int $scaleMax): string
+    {
+        if ($points === []) {
+            return '';
+        }
+
+        $coordinates = self::plottedCoordinates($points, $scaleMin, $scaleMax);
+        $indices = [0];
+
+        if (count($points) > 2) {
+            $indices[] = (int) floor((count($points) - 1) / 2);
+        }
+
+        if (count($points) > 1) {
+            $indices[] = count($points) - 1;
+        }
+
+        $indices = array_values(array_unique($indices));
+        $html = '';
+
+        foreach ($indices as $index) {
+            $label = htmlspecialchars($points[$index]->date()->toIso(), ENT_QUOTES, 'UTF-8');
+            $x = self::formatCoordinate($coordinates[$index][0]);
+            $anchor = $index === 0 ? 'start' : ($index === count($points) - 1 ? 'end' : 'middle');
+
+            $html .= '                            <text class="trend-chart__axis-label" x="'
+                . $x . '" y="' . self::formatCoordinate(self::CHART_LABEL_Y)
+                . '" text-anchor="' . $anchor . '">' . $label . '</text>' . "\n";
+        }
+
+        return $html;
     }
 
     /**
@@ -409,7 +530,7 @@ final class SummaryController
         $markers = '';
 
         foreach (self::plottedCoordinates($points, $scaleMin, $scaleMax) as [$x, $y]) {
-            $markers .= '                        <circle class="trend-chart__point" cx="' . self::formatCoordinate($x) . '" cy="' . self::formatCoordinate($y) . '" r="2.5"></circle>' . "\n";
+            $markers .= '                        <circle class="trend-chart__point" cx="' . self::formatCoordinate($x) . '" cy="' . self::formatCoordinate($y) . '" r="4"></circle>' . "\n";
         }
 
         return $markers;

@@ -6,10 +6,12 @@ use Diary\Access\AccessControlService;
 use Diary\Access\ViewerAccessService;
 use Diary\Ai\AiConfig;
 use Diary\Ai\AiFeedbackService;
+use Diary\Ai\AiPositivesService;
 use Diary\Ai\AiSummaryService;
 use Diary\Ai\CbtRecommendationRepository;
 use Diary\Ai\CurlHttpTransport;
 use Diary\Ai\HttpsFeedbackProvider;
+use Diary\Ai\HttpsPositivesProvider;
 use Diary\Ai\HttpsSummaryProvider;
 use Diary\Auth\AuditLogRepository;
 use Diary\Auth\AuthService;
@@ -36,6 +38,7 @@ use Diary\Http\LoginController;
 use Diary\Http\LogoutController;
 use Diary\Http\MilestoneController;
 use Diary\Http\Pipeline;
+use Diary\Http\PositivesController;
 use Diary\Http\RegistrationController;
 use Diary\Http\Request;
 use Diary\Http\Router;
@@ -272,6 +275,14 @@ $aiSummaryService = new AiSummaryService(
 );
 $summaryPage = new SummaryController($accessControl, $aiSummaryService, $clock);
 $router->get(AccessControlService::SUMMARY_PATH, static fn (Request $r, array $params) => $summaryPage->show($r));
+
+$aiPositivesService = new AiPositivesService(
+    $diaryService,
+    $milestoneService,
+    new HttpsPositivesProvider(new CurlHttpTransport(), $aiConfig),
+);
+$positivesPage = new PositivesController($accessControl, $aiPositivesService, $clock);
+$router->get(AccessControlService::BRIGHT_SPOTS_PATH, static fn (Request $r, array $params) => $positivesPage->show($r));
 
 // Cron endpoints (Requirements 4.2, 4.5): token-authenticated URL calls from the
 // IONOS cron manager, never a browser session. They are registered on the same

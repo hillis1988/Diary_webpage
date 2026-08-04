@@ -63,6 +63,19 @@ final class DiaryEntryController
     /** The hidden field the retry form carries: which entry's date to retry. */
     public const RETRY_DATE_FIELD = 'entry_date';
 
+    /**
+     * Placeholder prose for the free text questions. Deliberately permissive:
+     * the point is to lower the bar for writing anything at all, so each one
+     * says a short answer is a complete answer.
+     *
+     * @var array<string, string>
+     */
+    private const PLACEHOLDERS = [
+        QuestionSet::EVENTS => 'A few words are plenty. What stands out when you look back over today?',
+        QuestionSet::THOUGHTS => 'Whatever has been circling. It does not need tidying up first.',
+        QuestionSet::EMOTIONS => 'Name what you noticed, and roughly how strongly it landed.',
+    ];
+
     public function __construct(
         private readonly AccessControlService $access,
         private readonly DiaryService $diaryService,
@@ -195,8 +208,9 @@ final class DiaryEntryController
         $safeHeading = htmlspecialchars(self::HEADING, ENT_QUOTES, 'UTF-8');
 
         $questionFields = '';
+        $step = 0;
         foreach ($questions as $question) {
-            $questionFields .= self::renderQuestionField($question, $answers, $fieldMessages);
+            $questionFields .= self::renderQuestionField($question, $answers, $fieldMessages, ++$step);
         }
 
         $safeCsrfField = htmlspecialchars(CsrfGuard::FIELD_NAME, ENT_QUOTES, 'UTF-8');
@@ -210,7 +224,7 @@ final class DiaryEntryController
             . '    <title>' . $safeHeading . '</title>' . "\n"
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
             . '</head>' . "\n"
-            . '<body>' . "\n"
+            . '<body class="page-diary">' . "\n"
             . '    <header class="app-header">' . "\n"
             . '        <div class="app-header__bar">' . "\n"
             . '            <a class="app-header__back" href="/">Home</a>' . "\n"
@@ -220,17 +234,41 @@ final class DiaryEntryController
             . '    <main id="main">' . "\n"
             . ($savedEntry !== null ? self::renderConfirmation($savedEntry, $feedbackOutcome, $csrfToken) : '')
             . self::renderErrorSummary($summaryMessage, $fieldMessages)
-            . '        <div class="card">' . "\n"
+            . ($savedEntry === null ? self::renderInvitation() : '')
+            . '        <div class="card journal-sheet">' . "\n"
             . '        <form method="post" action="' . AccessControlService::DIARY_ENTRY_PATH . '">' . "\n"
             . '            <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
             . self::renderDateField($answers, $fieldMessages)
             . $questionFields
-            . '            <button type="submit" class="button">Save entry</button>' . "\n"
+            . '            <div class="save-row">' . "\n"
+            . '                <button type="submit" class="button button--save">Save today&rsquo;s entry</button>' . "\n"
+            . '                <p class="save-row__note">Encrypted and private. You can come back and change it any time.</p>' . "\n"
+            . '            </div>' . "\n"
             . '        </form>' . "\n"
             . '        </div>' . "\n"
             . '    </main>' . "\n"
             . '</body>' . "\n"
             . '</html>' . "\n";
+    }
+
+    /**
+     * The warm opening panel: what makes the page feel like an invitation to
+     * write rather than a form to complete. Shown only before an entry is
+     * saved, so the confirmation takes that spot afterwards.
+     */
+    private static function renderInvitation(): string
+    {
+        return '        <section class="diary-hero">' . "\n"
+            . '            <p class="diary-hero__eyebrow">Today&rsquo;s page</p>' . "\n"
+            . '            <h2 class="diary-hero__title">How was today?</h2>' . "\n"
+            . '            <p class="diary-hero__lead">There is no right way to do this. A single line counts just as much '
+            . 'as a full page &mdash; what matters is that you showed up for it.</p>' . "\n"
+            . '            <ul class="diary-hero__marks">' . "\n"
+            . '                <li><span aria-hidden="true">&#128274;</span> Private to you</li>' . "\n"
+            . '                <li><span aria-hidden="true">&#9997;</span> Takes two minutes</li>' . "\n"
+            . '                <li><span aria-hidden="true">&#10024;</span> Notes back from your CBT companion</li>' . "\n"
+            . '            </ul>' . "\n"
+            . '        </section>' . "\n";
     }
 
     /**
@@ -287,9 +325,11 @@ final class DiaryEntryController
             )
             : '';
 
-        return '        <div class="card">' . "\n"
+        return '        <div class="card card--spotlight entry-saved">' . "\n"
             . '        <div role="status" class="notice notice--success">' . "\n"
-            . '            <p>' . $safeMessage . ' (' . $safeDate . ')</p>' . "\n"
+            . '            <p class="entry-saved__mark" aria-hidden="true">&#10003;</p>' . "\n"
+            . '            <p class="entry-saved__message">' . $safeMessage . ' (' . $safeDate . ')</p>' . "\n"
+            . '            <p class="entry-saved__note">That is today written down &mdash; a good thing to have done.</p>' . "\n"
             . '        </div>' . "\n"
             . $feedback
             . '        </div>' . "\n";
@@ -331,7 +371,7 @@ final class DiaryEntryController
         $error = self::renderFieldError($field, $fieldMessages);
         $describedBy = $error === '' ? '' : ' aria-describedby="' . $field . '-error"';
 
-        return '            <div class="field-group">' . "\n"
+        return '            <div class="dateline">' . "\n"
             . '                <label for="' . $field . '">Date</label>' . "\n"
             . '                <input type="date" id="' . $field . '" name="' . $field . '" value="' . $safeValue . '" required' . $describedBy . '>' . "\n"
             . $error
@@ -345,47 +385,80 @@ final class DiaryEntryController
         QuestionDefinition $question,
         SubmittedAnswers $answers,
         array $fieldMessages,
+        int $step,
     ): string {
         return $question->isScale()
-            ? self::renderScaleField($question, $answers, $fieldMessages)
-            : self::renderFreeTextField($question, $answers, $fieldMessages);
+            ? self::renderScaleField($question, $answers, $fieldMessages, $step)
+            : self::renderFreeTextField($question, $answers, $fieldMessages, $step);
     }
 
     /**
+     * A scale rendered as a row of selectable points rather than a dropdown:
+     * the whole range stays visible, so answering is one tap against a scale
+     * whose ends are labelled in place.
+     *
      * @param array<string, string> $fieldMessages
      */
     private static function renderScaleField(
         QuestionDefinition $question,
         SubmittedAnswers $answers,
         array $fieldMessages,
+        int $step,
     ): string {
         $field = $question->field();
         $safeField = htmlspecialchars($field, ENT_QUOTES, 'UTF-8');
-        $safeLabel = htmlspecialchars($question->label(), ENT_QUOTES, 'UTF-8');
         $currentValue = $answers->value($field);
         $error = self::renderFieldError($field, $fieldMessages);
         $describedBy = $error === '' ? '' : ' aria-describedby="' . $safeField . '-error"';
         $requiredAttr = $question->isRequired() ? ' required' : '';
 
-        $placeholderLabel = $question->isRequired() ? 'Select a rating' : 'Prefer not to say';
-        $options = '                <option value=""' . ($currentValue === '' ? ' selected' : '') . '>'
-            . htmlspecialchars($placeholderLabel, ENT_QUOTES, 'UTF-8') . '</option>' . "\n";
+        $points = $question->scalePoints();
+        $wideClass = count($points) > 5 ? ' scale-options--wide' : '';
 
-        foreach ($question->scalePoints() as $point) {
+        $scaleLabels = $question->scaleLabels();
+
+        $options = '';
+        foreach ($points as $index => $point) {
             $pointValue = (string) $point;
-            $selected = $currentValue === $pointValue ? ' selected' : '';
-            $options .= '                <option value="' . $pointValue . '"' . $selected . '>'
-                . htmlspecialchars($pointValue . ' - ' . $question->labelForPoint($point), ENT_QUOTES, 'UTF-8')
-                . '</option>' . "\n";
+            $checked = $currentValue === $pointValue ? ' checked' : '';
+            // `required` on one control marks the whole radio group required.
+            $required = $index === 0 ? $requiredAttr : '';
+            $optionId = $safeField . '-' . $pointValue;
+            // Only the points that carry a word of their own show one, so a
+            // 1-10 scale reads as numbers anchored at both ends rather than
+            // printing every number twice.
+            $name = isset($scaleLabels[$point])
+                ? '                        <span class="scale-option__name">'
+                    . htmlspecialchars($scaleLabels[$point], ENT_QUOTES, 'UTF-8') . '</span>' . "\n"
+                : '';
+
+            $options .= '                    <label class="scale-option" for="' . $optionId . '">' . "\n"
+                . '                        <input type="radio" id="' . $optionId . '" name="' . $safeField . '" value="' . $pointValue . '"'
+                . $checked . $required . '>' . "\n"
+                . '                        <span class="scale-option__value">' . $pointValue . '</span>' . "\n"
+                . $name
+                . '                    </label>' . "\n";
         }
 
-        return '            <div class="field-group">' . "\n"
-            . '                <label for="' . $safeField . '">' . $safeLabel . '</label>' . "\n"
-            . '                <select id="' . $safeField . '" name="' . $safeField . '"' . $requiredAttr . $describedBy . '>' . "\n"
+        if (!$question->isRequired()) {
+            // Not preselected: it is the way back out of an answer, not a
+            // default one. A blank group and an explicit skip both submit ''.
+            $options .= '                    <label class="scale-option scale-option--skip" for="' . $safeField . '-skip">' . "\n"
+                . '                        <input type="radio" id="' . $safeField . '-skip" name="' . $safeField . '" value="">' . "\n"
+                . '                        <span class="scale-option__value">&ndash;</span>' . "\n"
+                . '                        <span class="scale-option__name">Skip</span>' . "\n"
+                . '                    </label>' . "\n";
+        }
+
+        // The group carries the field name as its id so the error summary's
+        // "#field" link still lands on the question it names.
+        return '            <fieldset class="prompt-block prompt-block--scale" id="' . $safeField . '"' . $describedBy . '>' . "\n"
+            . '                <legend>' . self::renderPromptHeading($question, $step) . '</legend>' . "\n"
+            . '                <div class="scale-options' . $wideClass . '">' . "\n"
             . $options
-            . '                </select>' . "\n"
+            . '                </div>' . "\n"
             . $error
-            . '            </div>' . "\n";
+            . '            </fieldset>' . "\n";
     }
 
     /**
@@ -395,19 +468,34 @@ final class DiaryEntryController
         QuestionDefinition $question,
         SubmittedAnswers $answers,
         array $fieldMessages,
+        int $step,
     ): string {
         $field = $question->field();
         $safeField = htmlspecialchars($field, ENT_QUOTES, 'UTF-8');
-        $safeLabel = htmlspecialchars($question->label(), ENT_QUOTES, 'UTF-8');
         $safeValue = htmlspecialchars($answers->value($field), ENT_QUOTES, 'UTF-8');
         $error = self::renderFieldError($field, $fieldMessages);
         $describedBy = $error === '' ? '' : ' aria-describedby="' . $safeField . '-error"';
+        $safePlaceholder = htmlspecialchars(self::PLACEHOLDERS[$field] ?? '', ENT_QUOTES, 'UTF-8');
 
-        return '            <div class="field-group">' . "\n"
-            . '                <label for="' . $safeField . '">' . $safeLabel . '</label>' . "\n"
-            . '                <textarea id="' . $safeField . '" name="' . $safeField . '"' . $describedBy . '>' . $safeValue . '</textarea>' . "\n"
+        return '            <div class="prompt-block">' . "\n"
+            . '                <label for="' . $safeField . '">' . self::renderPromptHeading($question, $step) . '</label>' . "\n"
+            . '                <textarea id="' . $safeField . '" name="' . $safeField . '" rows="4" class="journal-textarea"'
+            . ' placeholder="' . $safePlaceholder . '"' . $describedBy . '>' . $safeValue . '</textarea>' . "\n"
+            . '                <p class="prompt-block__hint">Optional &mdash; leave it blank on the days it does not fit.</p>' . "\n"
             . $error
             . '            </div>' . "\n";
+    }
+
+    /**
+     * The step marker, the question itself, and the short field name that
+     * labels the same answer everywhere else in the app.
+     */
+    private static function renderPromptHeading(QuestionDefinition $question, int $step): string
+    {
+        return '<span class="prompt-block__step" aria-hidden="true">' . $step . '</span>'
+            . '<span class="prompt-block__question">' . htmlspecialchars($question->prompt(), ENT_QUOTES, 'UTF-8') . '</span>'
+            . '<span class="prompt-block__tag">' . htmlspecialchars($question->label(), ENT_QUOTES, 'UTF-8')
+            . ($question->isRequired() ? '' : ' &middot; optional') . '</span>';
     }
 
     /**
@@ -422,6 +510,6 @@ final class DiaryEntryController
         $safeField = htmlspecialchars($field, ENT_QUOTES, 'UTF-8');
         $safeMessage = htmlspecialchars($fieldMessages[$field], ENT_QUOTES, 'UTF-8');
 
-        return '                <p id="' . $safeField . '-error">' . $safeMessage . '</p>' . "\n";
+        return '                <p class="field-error" id="' . $safeField . '-error">' . $safeMessage . '</p>' . "\n";
     }
 }

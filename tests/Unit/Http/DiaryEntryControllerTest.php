@@ -184,7 +184,14 @@ final class DiaryEntryControllerTest extends TestCase
         $html = $response->body();
 
         self::assertStringContainsString('<form method="post" action="/diary">', $html);
-        self::assertStringContainsString('for="' . QuestionSet::MOOD_RATING . '"', $html);
+        // The mood scale is a labelled radio group: every point on the scale is
+        // its own labelled control, and the group is named by the legend.
+        self::assertStringContainsString('for="' . QuestionSet::MOOD_RATING . '-1"', $html);
+        self::assertStringContainsString('id="' . QuestionSet::MOOD_RATING . '-1"', $html);
+        self::assertStringContainsString('id="' . QuestionSet::MOOD_RATING . '-10"', $html);
+        self::assertStringContainsString('name="' . QuestionSet::MOOD_RATING . '"', $html);
+        // The group itself keeps the field name, so an error summary link to
+        // "#mood_rating" still lands on the question.
         self::assertStringContainsString('id="' . QuestionSet::MOOD_RATING . '"', $html);
         self::assertStringContainsString('for="' . QuestionSet::EVENTS . '"', $html);
         self::assertStringContainsString('id="' . QuestionSet::EVENTS . '"', $html);
@@ -195,8 +202,14 @@ final class DiaryEntryControllerTest extends TestCase
         $html = $this->controller->show($this->getRequest($this->ownerContext()))->body();
 
         self::assertStringContainsString('value="2025-03-15"', $html);
-        // No prior day's values are prefilled: the mood rating placeholder is selected.
-        self::assertStringContainsString('<option value="" selected>Select a rating</option>', $html);
+        // No prior day's values are prefilled: no point on the mood scale is
+        // preselected, and the free text answers are empty.
+        self::assertDoesNotMatchRegularExpression(
+            '/name="' . QuestionSet::MOOD_RATING . '" value="\d+" checked/',
+            $html
+        );
+        self::assertStringContainsString('name="' . QuestionSet::EVENTS . '" rows="4"', $html);
+        self::assertMatchesRegularExpression('/<textarea[^>]*id="' . QuestionSet::EVENTS . '"[^>]*><\/textarea>/', $html);
     }
 
     public function testShowIncludesAFreshCsrfToken(): void

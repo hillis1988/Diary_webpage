@@ -68,6 +68,12 @@ final class AccessControlService
     public const MILESTONES_PATH = '/milestones';
 
     /**
+     * Friend-toned reminders of past positives, authorised as a diary-data
+     * read like {@see SUMMARY_PATH} so a viewer context may open it too.
+     */
+    public const BRIGHT_SPOTS_PATH = '/bright-spots';
+
+    /**
      * Owner-only (Requirement 7.5): the viewer management page, listing viewers
      * and offering the invite form and revoke control, and the link a Viewer
      * follows to set their own password and accept an invitation. Unlike
@@ -166,6 +172,7 @@ final class AccessControlService
             [OperationKind::WriteDiaryEntry, new NavigationItem('Diary entry', self::DIARY_ENTRY_PATH)],
             [OperationKind::ReadDiaryData, new NavigationItem('Calendar', self::CALENDAR_PATH)],
             [OperationKind::ReadDiaryData, new NavigationItem('Summary', self::SUMMARY_PATH)],
+            [OperationKind::ReadDiaryData, new NavigationItem('Bright spots', self::BRIGHT_SPOTS_PATH)],
             [OperationKind::WriteMilestone, new NavigationItem('Milestones', self::MILESTONES_PATH)],
             [OperationKind::ManageAccess, new NavigationItem('Viewers', self::VIEWERS_PATH)],
         ];
