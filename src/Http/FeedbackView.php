@@ -156,7 +156,7 @@ final class FeedbackView
         return '            <form method="post" action="' . $safeAction . '">' . "\n"
             . '                <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
             . $hidden
-            . '                <button type="submit" class="button">' . $safeLabel . '</button>' . "\n"
+            . '                ' . PendingButton::render($safeLabel, 'Trying again…') . "\n"
             . '            </form>' . "\n";
     }
 }

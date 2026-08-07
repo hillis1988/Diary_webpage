@@ -27,19 +27,29 @@ don't get repeated (see "Lessons learned" at the end of this section).
 From the repository root (`c:\dev\Diary_webpage`) in PowerShell:
 
 ```powershell
-# Stage a clean copy first - Compress-Archive has no exclude flag, so
-# robocopy does the filtering before zipping.
-robocopy . ..\deploy-stage /E /XD .git .kiro .phpunit.cache "public\preview" /XF "config\config.php" *.log
-
-Compress-Archive -Path ..\deploy-stage\* -DestinationPath ..\diary-app.zip -Force
+powershell -ExecutionPolicy Bypass -File tools\package_release.ps1
 ```
+
+That writes `..\diary-app.zip` and refuses to build if a real config reaches
+the staging copy. Do not hand-roll the robocopy/`Compress-Archive` pair that
+used to live here - it had two silent faults the script exists to avoid:
+
+- **`/XD` and `/XF` ignore relative paths.** `/XF "config\config.php"` excluded
+  nothing at all, so the working tree's config was zipped and unpacked over the
+  live one. Nested exclusions have to be absolute paths.
+- **`Compress-Archive` on Windows PowerShell 5.1 writes backslash separators.**
+  Linux `unzip` then treats `public\index.php` as one flat filename rather than
+  a path, and the extracted tree has no directories.
 
 What's excluded and why:
 - `.git`, `.kiro` - no reason to ship history or specs to the server
 - `.phpunit.cache`, `public\preview`, `*.log` - dev-only artefacts
-- `config\config.php` - **never overwrite the live one.** It holds the real
-  database credentials and master encryption key; the local copy (if you even
-  have one) must never replace what's already on the server.
+- `config\config.php` and any `config\*.bak` - **never overwrite the live
+  one.** It holds the real database credentials and master encryption key. A
+  localhost config unpacked over the live one points the site at a database
+  that is not there (the symptom is the "Something went wrong" page), and its
+  master key cannot decrypt anything already stored under the real one.
+  Deploying config is a separate, deliberate, one-file upload.
 
 `vendor\` is deliberately **not** excluded - it's committed and shipped as-is
 since IONOS shared hosting may not run Composer.
@@ -134,6 +144,31 @@ the host" below).
 
 See "Transport security smoke check" below, and just load the site in a
 browser to confirm it's serving pages rather than a 500/404.
+
+### Diagnosing a "Something went wrong" page
+
+That page is `public/index.php`'s own fail-closed guard, not a PHP crash. It is
+reached only from bootstrap, and each cause writes a line beginning
+`Bootstrap failed:` to `logs/diary-error.log` (a sibling of `public/`, so it is
+above the document root and not web-readable):
+
+```bash
+tail -n 20 /home/www/diary-app/logs/diary-error.log
+```
+
+The five causes are a missing `vendor/autoload.php`, a missing
+`config/config.php`, a `config.php` that does not return an array, an
+`encryption.master_key_base64` that is absent or under 32 bytes, and a database
+connection that threw. The first two are the usual ones on a fresh deploy and
+can be confirmed without the log at all:
+
+```bash
+ls -la /home/www/diary-app/config/config.php
+ls -la /home/www/diary-app/vendor/autoload.php
+```
+
+`config/config.php` is gitignored and excluded from the deployment copy, so it
+never arrives with the files - it has to already exist on the host.
 
 ### Lessons learned (read before repeating this process)
 

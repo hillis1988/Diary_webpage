@@ -223,6 +223,7 @@ final class DiaryEntryController
             . '    <meta name="viewport" content="width=device-width, initial-scale=1">' . "\n"
             . '    <title>' . $safeHeading . '</title>' . "\n"
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
+            . '    <script src="/assets/app.js" defer></script>' . "\n"
             . '</head>' . "\n"
             . '<body class="page-diary">' . "\n"
             . '    <header class="app-header">' . "\n"
@@ -241,7 +242,7 @@ final class DiaryEntryController
             . self::renderDateField($answers, $fieldMessages)
             . $questionFields
             . '            <div class="save-row">' . "\n"
-            . '                <button type="submit" class="button button--save">Save today&rsquo;s entry</button>' . "\n"
+            . '                ' . PendingButton::render('Save today&rsquo;s entry', 'Saving your entry…', 'button button--save') . "\n"
             . '                <p class="save-row__note">Encrypted and private. You can come back and change it any time.</p>' . "\n"
             . '            </div>' . "\n"
             . '        </form>' . "\n"

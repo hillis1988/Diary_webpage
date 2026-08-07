@@ -77,6 +77,27 @@ const DIARY_SRC = DIARY_ROOT . '/src';
 const DIARY_TEMPLATES = DIARY_ROOT . '/templates';
 const DIARY_CONFIG = DIARY_ROOT . '/config';
 
+/*
+ * Error logging is set up here, above the first failure path rather than after
+ * the config is read. The two failures most likely on a fresh deploy - a
+ * missing autoloader and a missing config/config.php - are diagnosed only by
+ * the error_log() calls below, and those write nothing at all if the host's
+ * php.ini happens to have log_errors off.
+ *
+ * The destination is an explicit file above the document root, because shared
+ * hosting does not reliably expose the web server's own error log; 0750 and
+ * the location outside public/ keep it off the web.
+ */
+ini_set('log_errors', '1');
+error_reporting(E_ALL);
+// Stays off until the config below says this is not production.
+ini_set('display_errors', '0');
+
+$diaryLogDirectory = DIARY_ROOT . '/logs';
+if (is_dir($diaryLogDirectory) || @mkdir($diaryLogDirectory, 0750, true)) {
+    ini_set('error_log', $diaryLogDirectory . '/diary-error.log');
+}
+
 /**
  * Render a generic failure page. Never includes exception text, SQL or configuration values:
  * detail belongs in the server log, not in the response.
@@ -115,8 +136,6 @@ if (!is_array($config)) {
 // Detailed errors are only ever shown outside production.
 $isProduction = ($config['app']['env'] ?? 'production') === 'production';
 ini_set('display_errors', $isProduction ? '0' : '1');
-ini_set('log_errors', '1');
-error_reporting(E_ALL);
 
 // Dates are handled as explicit UTC values; the default keeps any implicit call predictable.
 date_default_timezone_set('UTC');

@@ -17,8 +17,11 @@
 # Local MariaDB data directory used for offline development
 /.local-mariadb/
 
-# Local backup of production config — never commit
+# Local backups of real configs — never commit. Both hold live credentials
+# and encryption keys; config.local.php.bak is the localhost one, kept so the
+# offline dev setup can be restored after config.php is switched back.
 /config/config.production.php.bak
+/config/config.local.php.bak
 
 
 # Editor and OS noise

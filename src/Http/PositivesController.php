@@ -118,6 +118,7 @@ final class PositivesController
             . '    <meta name="viewport" content="width=device-width, initial-scale=1">' . "\n"
             . '    <title>' . $safeHeading . '</title>' . "\n"
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
+            . '    <script src="/assets/app.js" defer></script>' . "\n"
             . '</head>' . "\n"
             . '<body class="page-bright-spots">' . "\n"
             . '    <header class="app-header">' . "\n"
@@ -163,7 +164,7 @@ final class PositivesController
             . '                    <label for="' . self::END_PARAM . '">To</label>' . "\n"
             . '                    <input type="date" id="' . self::END_PARAM . '" name="' . self::END_PARAM . '" value="' . $safeEnd . '" required>' . "\n"
             . '                </div>' . "\n"
-            . '                <button type="submit" class="button">Show my bright spots</button>' . "\n"
+            . '                ' . PendingButton::render('Show my bright spots', 'Finding your bright spots…') . "\n"
             . '            </form>' . "\n";
     }
 

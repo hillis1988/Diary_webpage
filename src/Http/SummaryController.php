@@ -165,6 +165,7 @@ final class SummaryController
             . '    <meta name="viewport" content="width=device-width, initial-scale=1">' . "\n"
             . '    <title>' . $safeHeading . '</title>' . "\n"
             . '    <link rel="stylesheet" href="/assets/app.css">' . "\n"
+            . '    <script src="/assets/app.js" defer></script>' . "\n"
             . '</head>' . "\n"
             . '<body>' . "\n"
             . '    <header class="app-header">' . "\n"
@@ -198,7 +199,7 @@ final class SummaryController
             . '                    <label for="' . self::END_PARAM . '">End date</label>' . "\n"
             . '                    <input type="date" id="' . self::END_PARAM . '" name="' . self::END_PARAM . '" value="' . $safeEnd . '" required>' . "\n"
             . '                </div>' . "\n"
-            . '                <button type="submit" class="button">View summary</button>' . "\n"
+            . '                ' . PendingButton::render('View summary', 'Building your summary…') . "\n"
             . '            </form>' . "\n";
     }
 

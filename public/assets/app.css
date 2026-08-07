@@ -383,6 +383,35 @@ button:hover,
     font-size: 0.85rem;
 }
 
+/* Waiting on the AI: applied by app.js once one of those forms has been submitted, so the
+ * press is acknowledged during the several seconds the provider takes. The spinner inherits
+ * the button's own text colour, which differs between the gold and secondary buttons.
+ * Under prefers-reduced-motion the ring is drawn but still, and the swapped label carries
+ * the message on its own. */
+
+.button__spinner {
+    display: inline-block;
+    width: 0.85em;
+    height: 0.85em;
+    margin-right: 0.5em;
+    vertical-align: -0.1em;
+    border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.button[aria-disabled="true"] {
+    pointer-events: none;
+    opacity: 0.8;
+}
+
 .form-inline {
     display: inline;
 }
