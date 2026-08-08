@@ -268,7 +268,8 @@ final class EncryptionAtRestPropertyTest extends TestCase
             'events' => Generator\string(),
             'thoughts' => Generator\string(),
             'emotions' => Generator\string(),
-            'schema_version' => Generator\constant(1),
+            'food_meals' => Generator\constant([]),
+            'schema_version' => Generator\constant(2),
         ]);
     }
 
@@ -282,7 +283,7 @@ final class EncryptionAtRestPropertyTest extends TestCase
         return Generator\associative([
             'description' => Generator\string(),
             'category' => Generator\elements(['medication', 'relationship', 'lifestyle', 'other']),
-            'schema_version' => Generator\constant(1),
+            'schema_version' => Generator\constant(2),
         ]);
     }
 

@@ -77,8 +77,76 @@ final class PayloadCodecTest extends TestCase
         self::assertStringNotContainsString('coast', $row['payload_ciphertext']);
 
         self::assertSame(
+            $payload + [
+                'food_meals' => [],
+                'schema_version' => PayloadCodec::SCHEMA_VERSION,
+            ],
+            $this->codec->decode(PayloadShape::DiaryEntry, self::ENTRY_ID, $row)
+        );
+    }
+
+    public function testDiaryEntryFoodMealsRoundTrip(): void
+    {
+        $payload = [
+            'mood_rating' => 6,
+            'sleep_quality' => 4,
+            'events' => '',
+            'thoughts' => '',
+            'emotions' => '',
+            'food_meals' => [
+                [
+                    'type' => 'breakfast',
+                    'description' => 'Oats and berries',
+                    'notes' => 'Felt steady',
+                ],
+                [
+                    'type' => 'lunch',
+                    'description' => 'Soup',
+                    'notes' => '',
+                ],
+            ],
+        ];
+
+        $row = $this->codec->encodeRow(PayloadShape::DiaryEntry, self::ENTRY_ID, $payload);
+
+        self::assertSame(
             $payload + ['schema_version' => PayloadCodec::SCHEMA_VERSION],
             $this->codec->decode(PayloadShape::DiaryEntry, self::ENTRY_ID, $row)
+        );
+    }
+
+    public function testLegacySchemaVersionOneDiaryRowReadsWithEmptyFoodMeals(): void
+    {
+        $crypto = new Crypto(new KeyRing(
+            $this->pdo,
+            str_repeat("\x2a", KeyRing::KEY_LENGTH),
+            FixedClock::at('2025-03-01 09:30:00')
+        ));
+
+        $envelope = $crypto->encryptFor(
+            PayloadShape::DiaryEntry->table(),
+            self::ENTRY_ID,
+            json_encode([
+                'mood_rating' => 7,
+                'sleep_quality' => 3,
+                'events' => 'a',
+                'thoughts' => 'b',
+                'emotions' => 'c',
+                'schema_version' => 1,
+            ], JSON_THROW_ON_ERROR)
+        );
+
+        self::assertSame(
+            [
+                'mood_rating' => 7,
+                'sleep_quality' => 3,
+                'events' => 'a',
+                'thoughts' => 'b',
+                'emotions' => 'c',
+                'food_meals' => [],
+                'schema_version' => PayloadCodec::SCHEMA_VERSION,
+            ],
+            $this->codec->decodeEnvelope(PayloadShape::DiaryEntry, self::ENTRY_ID, $envelope)
         );
     }
 
@@ -93,7 +161,7 @@ final class PayloadCodecTest extends TestCase
             [
                 'description' => 'Started a new medication',
                 'category' => 'medication',
-                'schema_version' => 1,
+                'schema_version' => PayloadCodec::SCHEMA_VERSION,
             ],
             $this->codec->decode(PayloadShape::Milestone, self::MILESTONE_ID, $milestoneRow)
         );
@@ -107,7 +175,7 @@ final class PayloadCodecTest extends TestCase
             [
                 'positive_focus' => 'You noticed the coping you did well.',
                 'suggested_change' => 'Try naming one alternative thought tomorrow.',
-                'schema_version' => 1,
+                'schema_version' => PayloadCodec::SCHEMA_VERSION,
             ],
             $this->codec->decode(PayloadShape::CbtRecommendation, self::RECOMMENDATION_ID, $recommendationRow)
         );
@@ -124,7 +192,8 @@ final class PayloadCodecTest extends TestCase
                 'events' => '',
                 'thoughts' => '',
                 'emotions' => '',
-                'schema_version' => 1,
+                'food_meals' => [],
+                'schema_version' => PayloadCodec::SCHEMA_VERSION,
             ],
             $this->codec->decode(PayloadShape::DiaryEntry, self::ENTRY_ID, $row)
         );
@@ -266,7 +335,11 @@ final class PayloadCodecTest extends TestCase
         );
 
         self::assertSame(
-            ['description' => 'Moved house', 'category' => 'lifestyle', 'schema_version' => 1],
+            [
+                'description' => 'Moved house',
+                'category' => 'lifestyle',
+                'schema_version' => PayloadCodec::SCHEMA_VERSION,
+            ],
             $this->codec->decodeEnvelope(PayloadShape::Milestone, self::MILESTONE_ID, $envelope)
         );
     }
@@ -285,7 +358,15 @@ final class PayloadCodecTest extends TestCase
         yield 'sleep quality below range' => [PayloadShape::DiaryEntry, ['mood_rating' => 5, 'sleep_quality' => 0]];
         yield 'free text not text' => [PayloadShape::DiaryEntry, ['mood_rating' => 5, 'thoughts' => ['a']]];
         yield 'unknown diary field' => [PayloadShape::DiaryEntry, ['mood_rating' => 5, 'mood' => 5]];
-        yield 'unreadable schema version' => [PayloadShape::DiaryEntry, ['mood_rating' => 5, 'schema_version' => 2]];
+        yield 'unreadable schema version' => [PayloadShape::DiaryEntry, ['mood_rating' => 5, 'schema_version' => 99]];
+        yield 'food meal missing description' => [PayloadShape::DiaryEntry, [
+            'mood_rating' => 5,
+            'food_meals' => [['type' => 'breakfast', 'description' => '', 'notes' => '']],
+        ]];
+        yield 'food meal unknown type' => [PayloadShape::DiaryEntry, [
+            'mood_rating' => 5,
+            'food_meals' => [['type' => 'brunch', 'description' => 'Eggs', 'notes' => '']],
+        ]];
         yield 'milestone description missing' => [PayloadShape::Milestone, ['category' => 'other']];
         yield 'milestone description blank' => [PayloadShape::Milestone, ['description' => '  ', 'category' => 'other']];
         yield 'milestone category unknown' => [PayloadShape::Milestone, ['description' => 'x', 'category' => 'work']];

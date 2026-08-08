@@ -1447,6 +1447,167 @@ body.page-diary .app-header {
     color: var(--colour-muted);
 }
 
+/* Diary Journal / Food tabs. Without JS the tablist is unused and both panels
+ * stack. With html.js, only the active panel is shown. */
+
+.diary-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.diary-tabs__list {
+    display: none;
+    gap: 0.35rem;
+    padding: 0.25rem;
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-sm);
+    background: var(--colour-surface-alt);
+}
+
+html.js .diary-tabs__list {
+    display: flex;
+}
+
+.diary-tabs__tab {
+    flex: 1;
+    background: transparent;
+    color: var(--colour-muted);
+    border: none;
+    box-shadow: none;
+    padding: 0.55rem 0.75rem;
+    border-radius: calc(var(--radius-sm) - 2px);
+    font-weight: 650;
+}
+
+.diary-tabs__tab:hover {
+    transform: none;
+    filter: none;
+    color: var(--colour-text);
+    background: color-mix(in srgb, var(--colour-accent) 12%, transparent);
+}
+
+.diary-tabs__tab[aria-selected="true"] {
+    background: linear-gradient(180deg, var(--colour-accent-dark), var(--colour-accent));
+    color: #201a10;
+}
+
+.diary-tabs__optional {
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+html:not(.js) .diary-tabs__panel + .diary-tabs__panel {
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px dashed var(--colour-border-strong);
+}
+
+.food-diary__lead {
+    margin: 0 0 0.9rem;
+    color: var(--colour-muted);
+    font-size: 0.95rem;
+}
+
+.food-meal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.food-meal {
+    margin: 0;
+    padding: 0.85rem 0.9rem;
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-sm);
+    background: var(--colour-surface-raised);
+}
+
+.food-meal__legend {
+    padding: 0 0.25rem;
+    font-family: var(--font-heading);
+    color: var(--colour-accent-dark);
+    font-size: 0.95rem;
+}
+
+.food-meal__optional {
+    color: var(--colour-muted);
+    font-weight: 500;
+    font-size: 0.85em;
+}
+
+.food-meal__actions {
+    margin: 0.35rem 0 0;
+}
+
+.day-food {
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px dashed var(--colour-border-strong);
+}
+
+.day-food__heading {
+    margin: 0 0 0.6rem;
+    font-family: var(--font-heading);
+    color: var(--colour-accent-dark);
+    font-size: 1.1rem;
+}
+
+.day-food__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.day-food__item {
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-sm);
+    background: var(--colour-surface-alt);
+}
+
+.day-food__type {
+    display: block;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--colour-secondary-bright);
+    margin-bottom: 0.2rem;
+}
+
+.day-food__description {
+    margin: 0;
+    color: var(--colour-text);
+}
+
+.day-food__notes {
+    margin: 0.35rem 0 0;
+    color: var(--colour-muted);
+    font-size: 0.9rem;
+}
+
+.diet-notes__heading {
+    margin: 0 0 0.75rem;
+    font-family: var(--font-heading);
+    color: var(--colour-accent-dark);
+}
+
+.diet-notes__section {
+    margin-bottom: 0.85rem;
+}
+
+.diet-notes__label {
+    margin: 0 0 0.25rem;
+    font-size: 0.85rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--colour-secondary-bright);
+}
+
 .entry-saved__mark {
     display: flex;
     align-items: center;

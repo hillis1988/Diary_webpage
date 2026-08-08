@@ -205,6 +205,11 @@ misconfiguration cannot serve the encryption key or database credentials
 `public/` as the document root, per IONOS's support for subdirectory document
 roots.
 
+Encrypted diary payloads moved to schema version 2 to allow an optional
+`food_meals` array inside the existing `diary_entries` blob. That change is
+documented in `migrations/010_diary_entry_food_meals.md` and needs **no SQL**
+on deploy — copy the application files only.
+
 ## config/config.php
 
 Copy `config/config.example.php` to `config/config.php` and fill in the real

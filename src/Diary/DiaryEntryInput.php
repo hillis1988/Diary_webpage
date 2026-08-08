@@ -30,6 +30,7 @@ final class DiaryEntryInput
         private readonly string $events,
         private readonly string $thoughts,
         private readonly string $emotions,
+        private readonly FoodDiary $foodDiary,
     ) {
     }
 
@@ -40,6 +41,7 @@ final class DiaryEntryInput
         string $events = '',
         string $thoughts = '',
         string $emotions = '',
+        ?FoodDiary $foodDiary = null,
     ): self {
         self::assertOnScale(QuestionSet::moodRating(), $moodRating);
 
@@ -47,7 +49,15 @@ final class DiaryEntryInput
             self::assertOnScale(QuestionSet::sleepQuality(), $sleepQuality);
         }
 
-        return new self($date, $moodRating, $sleepQuality, $events, $thoughts, $emotions);
+        return new self(
+            $date,
+            $moodRating,
+            $sleepQuality,
+            $events,
+            $thoughts,
+            $emotions,
+            $foodDiary ?? FoodDiary::empty(),
+        );
     }
 
     public function date(): LocalDate
@@ -82,6 +92,11 @@ final class DiaryEntryInput
         return $this->emotions;
     }
 
+    public function foodDiary(): FoodDiary
+    {
+        return $this->foodDiary;
+    }
+
     /**
      * The answer to one question by field name, so a caller iterating the
      * question set does not need a switch of its own.
@@ -101,12 +116,38 @@ final class DiaryEntryInput
     }
 
     /**
-     * The content half of the encrypted diary payload, in question-set order.
-     * `schema_version` is the storage layer's business and is not added here.
+     * The content half of the encrypted diary payload, in question-set order,
+     * plus the optional food diary. `schema_version` is the storage layer's
+     * business and is not added here.
      *
-     * @return array<string, string|int|null>
+     * @return array<string, mixed>
      */
     public function toPayload(): array
+    {
+        return [
+            ...$this->questionPayload(),
+            'food_meals' => $this->foodDiary->toPayload(),
+        ];
+    }
+
+    /**
+     * The input back in submitted form, for redisplaying a saved entry in the
+     * form it was entered through. Food meals are not part of the flat
+     * {@see SubmittedAnswers} whitelist; the controller re-renders them from
+     * {@see foodDiary()} separately.
+     */
+    public function toSubmittedAnswers(): SubmittedAnswers
+    {
+        return SubmittedAnswers::of([
+            QuestionSet::DATE_FIELD => $this->date->toIso(),
+            ...$this->questionPayload(),
+        ]);
+    }
+
+    /**
+     * @return array<string, string|int|null>
+     */
+    private function questionPayload(): array
     {
         $payload = [];
 
@@ -115,18 +156,6 @@ final class DiaryEntryInput
         }
 
         return $payload;
-    }
-
-    /**
-     * The input back in submitted form, for redisplaying a saved entry in the
-     * form it was entered through.
-     */
-    public function toSubmittedAnswers(): SubmittedAnswers
-    {
-        return SubmittedAnswers::of([
-            QuestionSet::DATE_FIELD => $this->date->toIso(),
-            ...$this->toPayload(),
-        ]);
     }
 
     private static function assertOnScale(QuestionDefinition $question, int $value): void

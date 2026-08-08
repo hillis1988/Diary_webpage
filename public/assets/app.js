@@ -90,4 +90,126 @@
             stopWaiting();
         }
     });
+
+    /*
+     * Diary Journal / Food tabs. Without JS both panels stay stacked and the
+     * tablist is hidden via CSS. With JS we activate one panel at a time.
+     */
+    function activateTab(root, targetId) {
+        var tabs = root.querySelectorAll('[role="tab"][data-tab-target]');
+        var panels = root.querySelectorAll('[data-tab-panel]');
+
+        tabs.forEach(function (tab) {
+            var selected = tab.getAttribute('data-tab-target') === targetId;
+            tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+            tab.tabIndex = selected ? 0 : -1;
+        });
+
+        panels.forEach(function (panel) {
+            var match = panel.getAttribute('data-tab-panel') === targetId;
+            if (match) {
+                panel.removeAttribute('hidden');
+            } else {
+                panel.setAttribute('hidden', 'hidden');
+            }
+        });
+    }
+
+    function initTabs(root) {
+        var defaultTab = root.querySelector('[role="tab"][data-default-tab="true"]')
+            || root.querySelector('[role="tab"]');
+        if (defaultTab === null) {
+            return;
+        }
+
+        activateTab(root, defaultTab.getAttribute('data-tab-target'));
+    }
+
+    document.querySelectorAll('[data-tabs]').forEach(initTabs);
+
+    document.addEventListener('click', function (event) {
+        var target = event.target;
+        if (!(target instanceof Element)) {
+            return;
+        }
+
+        var tab = target.closest('[role="tab"][data-tab-target]');
+        if (tab !== null) {
+            var tabsRoot = tab.closest('[data-tabs]');
+            if (tabsRoot !== null) {
+                event.preventDefault();
+                activateTab(tabsRoot, tab.getAttribute('data-tab-target'));
+                tab.focus();
+            }
+            return;
+        }
+
+        var addMeal = target.closest('[data-action="add-food-meal"]');
+        if (addMeal !== null) {
+            event.preventDefault();
+            addFoodMealRow(addMeal.closest('form') || document);
+            return;
+        }
+
+        var removeMeal = target.closest('[data-action="remove-food-meal"]');
+        if (removeMeal !== null) {
+            event.preventDefault();
+            removeFoodMealRow(removeMeal.closest('[data-food-meal-row]'));
+        }
+    });
+
+    function nextFoodMealIndex(list) {
+        var max = -1;
+        list.querySelectorAll('[data-food-meal-row]').forEach(function (row) {
+            row.querySelectorAll('[name^="food_meal["]').forEach(function (field) {
+                var match = field.getAttribute('name').match(/^food_meal\[(\d+)\]/);
+                if (match) {
+                    max = Math.max(max, parseInt(match[1], 10));
+                }
+            });
+        });
+        return max + 1;
+    }
+
+    function addFoodMealRow(scope) {
+        var template = scope.querySelector('#food-meal-row-template');
+        var list = scope.querySelector('[data-food-meals-list]');
+        if (template === null || list === null) {
+            return;
+        }
+
+        var index = nextFoodMealIndex(list);
+        var html = template.innerHTML.split('__INDEX__').join(String(index));
+        var wrapper = document.createElement('div');
+        wrapper.innerHTML = html.trim();
+        var row = wrapper.firstElementChild;
+        if (row !== null) {
+            list.appendChild(row);
+        }
+    }
+
+    function removeFoodMealRow(row) {
+        if (row === null) {
+            return;
+        }
+
+        var list = row.closest('[data-food-meals-list]');
+        if (list === null) {
+            return;
+        }
+
+        var rows = list.querySelectorAll('[data-food-meal-row]');
+        if (rows.length <= 1) {
+            row.querySelectorAll('input, select, textarea').forEach(function (field) {
+                if (field instanceof HTMLSelectElement) {
+                    field.selectedIndex = 0;
+                } else {
+                    field.value = '';
+                }
+            });
+            return;
+        }
+
+        row.remove();
+    }
 })();

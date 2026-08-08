@@ -26,6 +26,9 @@ enum PayloadShape: string
     /** The categories a milestone may carry; encrypted, because "medication" is health information. */
     public const MILESTONE_CATEGORIES = ['medication', 'relationship', 'lifestyle', 'other'];
 
+    /** Closed meal types for the optional food diary inside a diary entry payload. */
+    public const FOOD_MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack', 'other'];
+
     /**
      * The table whose `key_id`, `nonce` and `payload_ciphertext` columns hold
      * this payload, and the table half of the record binding.
@@ -53,6 +56,7 @@ enum PayloadShape: string
                 'events',
                 'thoughts',
                 'emotions',
+                'food_meals',
                 'schema_version',
             ],
             self::CbtRecommendation => [

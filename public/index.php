@@ -5,11 +5,13 @@ declare(strict_types=1);
 use Diary\Access\AccessControlService;
 use Diary\Access\ViewerAccessService;
 use Diary\Ai\AiConfig;
+use Diary\Ai\AiDietSummaryService;
 use Diary\Ai\AiFeedbackService;
 use Diary\Ai\AiPositivesService;
 use Diary\Ai\AiSummaryService;
 use Diary\Ai\CbtRecommendationRepository;
 use Diary\Ai\CurlHttpTransport;
+use Diary\Ai\HttpsDietSummaryProvider;
 use Diary\Ai\HttpsFeedbackProvider;
 use Diary\Ai\HttpsPositivesProvider;
 use Diary\Ai\HttpsSummaryProvider;
@@ -292,7 +294,11 @@ $aiSummaryService = new AiSummaryService(
     $milestoneService,
     new HttpsSummaryProvider(new CurlHttpTransport(), $aiConfig),
 );
-$summaryPage = new SummaryController($accessControl, $aiSummaryService, $clock);
+$aiDietSummaryService = new AiDietSummaryService(
+    $diaryService,
+    new HttpsDietSummaryProvider(new CurlHttpTransport(), $aiConfig),
+);
+$summaryPage = new SummaryController($accessControl, $aiSummaryService, $clock, $aiDietSummaryService);
 $router->get(AccessControlService::SUMMARY_PATH, static fn (Request $r, array $params) => $summaryPage->show($r));
 
 $aiPositivesService = new AiPositivesService(

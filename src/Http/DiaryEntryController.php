@@ -11,6 +11,8 @@ use Diary\Ai\FeedbackOutcome;
 use Diary\Diary\DiaryEntry;
 use Diary\Diary\DiaryInputValidator;
 use Diary\Diary\DiaryService;
+use Diary\Diary\FoodMeal;
+use Diary\Diary\FoodMealsParser;
 use Diary\Diary\QuestionDefinition;
 use Diary\Diary\QuestionSet;
 use Diary\Diary\SubmittedAnswers;
@@ -105,6 +107,8 @@ final class DiaryEntryController
             [],
             $this->csrf->issueFor($request),
             null,
+            null,
+            FoodMealsParser::rowsForRedisplay([]),
         ));
     }
 
@@ -117,8 +121,9 @@ final class DiaryEntryController
             return $denied;
         }
 
-        $answers = SubmittedAnswers::fromForm($request->formParams());
-        $validation = $this->validator->validate($answers);
+        $form = $request->formParams();
+        $answers = SubmittedAnswers::fromForm($form);
+        $validation = $this->validator->validate($answers, $form);
 
         if ($validation->isRejected()) {
             return Response::html(self::render(
@@ -128,6 +133,8 @@ final class DiaryEntryController
                 $validation->fieldMessages(),
                 $this->csrf->issueFor($request),
                 null,
+                null,
+                FoodMealsParser::rowsForRedisplay($form),
             ));
         }
 
@@ -148,6 +155,7 @@ final class DiaryEntryController
             $this->csrf->issueFor($request),
             $entry,
             $outcome,
+            FoodMealsParser::rowsForRedisplay([], $entry->input()->foodDiary()),
         ));
     }
 
@@ -189,12 +197,14 @@ final class DiaryEntryController
             $this->csrf->issueFor($request),
             $entry,
             $outcome,
+            FoodMealsParser::rowsForRedisplay([], $entry->input()->foodDiary()),
         ));
     }
 
     /**
      * @param list<QuestionDefinition> $questions
      * @param array<string, string>    $fieldMessages
+     * @param list<array{type: string, description: string, notes: string}> $foodRows
      */
     public static function render(
         array $questions,
@@ -204,6 +214,7 @@ final class DiaryEntryController
         string $csrfToken,
         ?DiaryEntry $savedEntry,
         ?FeedbackOutcome $feedbackOutcome = null,
+        array $foodRows = [],
     ): string {
         $safeHeading = htmlspecialchars(self::HEADING, ENT_QUOTES, 'UTF-8');
 
@@ -213,6 +224,11 @@ final class DiaryEntryController
             $questionFields .= self::renderQuestionField($question, $answers, $fieldMessages, ++$step);
         }
 
+        if ($foodRows === []) {
+            $foodRows = FoodMealsParser::rowsForRedisplay([]);
+        }
+
+        $openFoodTab = self::foodTabHasErrors($fieldMessages);
         $safeCsrfField = htmlspecialchars(CsrfGuard::FIELD_NAME, ENT_QUOTES, 'UTF-8');
         $safeCsrfToken = htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8');
 
@@ -240,7 +256,24 @@ final class DiaryEntryController
             . '        <form method="post" action="' . AccessControlService::DIARY_ENTRY_PATH . '">' . "\n"
             . '            <input type="hidden" name="' . $safeCsrfField . '" value="' . $safeCsrfToken . '">' . "\n"
             . self::renderDateField($answers, $fieldMessages)
+            . '            <div class="diary-tabs" data-tabs>' . "\n"
+            . '                <div class="diary-tabs__list" role="tablist" aria-label="Diary sections">' . "\n"
+            . '                    <button type="button" class="diary-tabs__tab" role="tab" id="tab-journal" data-tab-target="panel-journal"'
+            . ' aria-controls="panel-journal" aria-selected="' . ($openFoodTab ? 'false' : 'true') . '" data-default-tab="'
+            . ($openFoodTab ? 'false' : 'true') . '">Journal</button>' . "\n"
+            . '                    <button type="button" class="diary-tabs__tab" role="tab" id="tab-food" data-tab-target="panel-food"'
+            . ' aria-controls="panel-food" aria-selected="' . ($openFoodTab ? 'true' : 'false') . '" data-default-tab="'
+            . ($openFoodTab ? 'true' : 'false') . '">Food <span class="diary-tabs__optional">(optional)</span></button>' . "\n"
+            . '                </div>' . "\n"
+            . '                <div class="diary-tabs__panel" role="tabpanel" id="panel-journal" data-tab-panel="panel-journal"'
+            . ' aria-labelledby="tab-journal">' . "\n"
             . $questionFields
+            . '                </div>' . "\n"
+            . '                <div class="diary-tabs__panel" role="tabpanel" id="panel-food" data-tab-panel="panel-food"'
+            . ' aria-labelledby="tab-food">' . "\n"
+            . self::renderFoodPanel($foodRows, $fieldMessages)
+            . '                </div>' . "\n"
+            . '            </div>' . "\n"
             . '            <div class="save-row">' . "\n"
             . '                ' . PendingButton::render('Save today&rsquo;s entry', 'Saving your entry…', 'button button--save') . "\n"
             . '                <p class="save-row__note">Encrypted and private. You can come back and change it any time.</p>' . "\n"
@@ -250,6 +283,114 @@ final class DiaryEntryController
             . '    </main>' . "\n"
             . '</body>' . "\n"
             . '</html>' . "\n";
+    }
+
+    /**
+     * @param array<string, string> $fieldMessages
+     */
+    private static function foodTabHasErrors(array $fieldMessages): bool
+    {
+        foreach (array_keys($fieldMessages) as $field) {
+            if ($field === FoodMealsParser::FORM_KEY || str_starts_with($field, FoodMealsParser::FORM_KEY . '_')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param list<array{type: string, description: string, notes: string}> $rows
+     * @param array<string, string> $fieldMessages
+     */
+    private static function renderFoodPanel(array $rows, array $fieldMessages): string
+    {
+        $rowsHtml = '';
+        foreach ($rows as $index => $row) {
+            $rowsHtml .= self::renderFoodMealRow((int) $index, $row, $fieldMessages);
+        }
+
+        return '                    <p class="food-diary__lead">Optional. Add meals if you want the progress summary to notice how food and mood travel together.</p>' . "\n"
+            . '                    <div class="food-meal-list" data-food-meals-list>' . "\n"
+            . $rowsHtml
+            . '                    </div>' . "\n"
+            . '                    <p><button type="button" class="button button--secondary button--small" data-action="add-food-meal">Add another meal</button></p>' . "\n"
+            . '                    <template id="food-meal-row-template">' . "\n"
+            . self::renderFoodMealRow(0, [
+                FoodMealsParser::TYPE_FIELD => FoodMeal::TYPE_BREAKFAST,
+                FoodMealsParser::DESCRIPTION_FIELD => '',
+                FoodMealsParser::NOTES_FIELD => '',
+            ], [], '__INDEX__')
+            . '                    </template>' . "\n";
+    }
+
+    /**
+     * @param array{type: string, description: string, notes: string} $row
+     * @param array<string, string> $fieldMessages
+     */
+    private static function renderFoodMealRow(int $index, array $row, array $fieldMessages, string $indexToken = ''): string
+    {
+        $indexAttr = $indexToken !== '' ? $indexToken : (string) $index;
+        $namePrefix = FoodMealsParser::FORM_KEY . '[' . $indexAttr . ']';
+        $idPrefix = $indexToken !== ''
+            ? FoodMealsParser::FORM_KEY . '_' . $indexToken . '_'
+            : FoodMealsParser::FORM_KEY . '_' . $index . '_';
+
+        $typeId = $idPrefix . FoodMealsParser::TYPE_FIELD;
+        $descriptionId = $idPrefix . FoodMealsParser::DESCRIPTION_FIELD;
+        $notesId = $idPrefix . FoodMealsParser::NOTES_FIELD;
+
+        $typeError = self::renderNamedFieldError($typeId, $fieldMessages);
+        $descriptionError = self::renderNamedFieldError($descriptionId, $fieldMessages);
+        $notesError = self::renderNamedFieldError($notesId, $fieldMessages);
+
+        $options = '';
+        foreach (FoodMeal::TYPES as $type) {
+            $selected = ($row[FoodMealsParser::TYPE_FIELD] ?? '') === $type ? ' selected' : '';
+            $options .= '                                <option value="' . htmlspecialchars($type, ENT_QUOTES, 'UTF-8') . '"'
+                . $selected . '>' . htmlspecialchars(FoodMeal::TYPE_LABELS[$type], ENT_QUOTES, 'UTF-8') . '</option>' . "\n";
+        }
+
+        return '                        <fieldset class="food-meal" data-food-meal-row>' . "\n"
+            . '                            <legend class="food-meal__legend">Meal</legend>' . "\n"
+            . '                            <div class="field-group">' . "\n"
+            . '                                <label for="' . $typeId . '">Type</label>' . "\n"
+            . '                                <select id="' . $typeId . '" name="' . $namePrefix . '[' . FoodMealsParser::TYPE_FIELD . ']">' . "\n"
+            . $options
+            . '                                </select>' . "\n"
+            . $typeError
+            . '                            </div>' . "\n"
+            . '                            <div class="field-group">' . "\n"
+            . '                                <label for="' . $descriptionId . '">What did you eat?</label>' . "\n"
+            . '                                <input type="text" id="' . $descriptionId . '" name="' . $namePrefix . '[' . FoodMealsParser::DESCRIPTION_FIELD . ']"'
+            . ' value="' . htmlspecialchars($row[FoodMealsParser::DESCRIPTION_FIELD] ?? '', ENT_QUOTES, 'UTF-8') . '"'
+            . ' placeholder="A short note is enough">' . "\n"
+            . $descriptionError
+            . '                            </div>' . "\n"
+            . '                            <div class="field-group">' . "\n"
+            . '                                <label for="' . $notesId . '">Notes <span class="food-meal__optional">optional</span></label>' . "\n"
+            . '                                <input type="text" id="' . $notesId . '" name="' . $namePrefix . '[' . FoodMealsParser::NOTES_FIELD . ']"'
+            . ' value="' . htmlspecialchars($row[FoodMealsParser::NOTES_FIELD] ?? '', ENT_QUOTES, 'UTF-8') . '"'
+            . ' placeholder="How it left you feeling, portion, anything else">' . "\n"
+            . $notesError
+            . '                            </div>' . "\n"
+            . '                            <p class="food-meal__actions"><button type="button" class="button button--secondary button--small" data-action="remove-food-meal">Remove meal</button></p>' . "\n"
+            . '                        </fieldset>' . "\n";
+    }
+
+    /**
+     * @param array<string, string> $fieldMessages
+     */
+    private static function renderNamedFieldError(string $fieldId, array $fieldMessages): string
+    {
+        if (!isset($fieldMessages[$fieldId])) {
+            return '';
+        }
+
+        $safeId = htmlspecialchars($fieldId, ENT_QUOTES, 'UTF-8');
+        $safeMessage = htmlspecialchars($fieldMessages[$fieldId], ENT_QUOTES, 'UTF-8');
+
+        return '                                <p class="field-error" id="' . $safeId . '-error">' . $safeMessage . '</p>' . "\n";
     }
 
     /**

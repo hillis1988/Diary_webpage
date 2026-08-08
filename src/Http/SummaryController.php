@@ -6,7 +6,11 @@ namespace Diary\Http;
 
 use Diary\Access\AccessControlService;
 use Diary\Access\Decision;
+use Diary\Ai\AiDietSummaryService;
 use Diary\Ai\AiSummaryService;
+use Diary\Ai\CbtAdvice;
+use Diary\Ai\DietSummary;
+use Diary\Ai\DietSummaryOutcome;
 use Diary\Ai\ProgressSummary;
 use Diary\Ai\SeriesStats;
 use Diary\Ai\SharedTrendAxis;
@@ -45,6 +49,8 @@ final class SummaryController
 {
     public const HEADING = 'Progress summary';
 
+    public const DIET_NOTES_HEADING = "Dietitian's notes";
+
     public const START_PARAM = 'start';
     public const END_PARAM = 'end';
 
@@ -70,6 +76,7 @@ final class SummaryController
         private readonly AccessControlService $access,
         private readonly AiSummaryService $summaryService,
         private readonly Clock $clock,
+        private readonly ?AiDietSummaryService $dietSummaryService = null,
     ) {
     }
 
@@ -85,13 +92,20 @@ final class SummaryController
         $submittedRange = self::resolveSubmittedRange($request);
 
         if ($submittedRange === null) {
-            return Response::html(self::render(self::defaultRange($this->clock), null));
+            return Response::html(self::render(self::defaultRange($this->clock), null, null));
         }
 
         $owner = $this->access->resolveDataOwner($context);
         $outcome = $this->summaryService->summarise($owner, $submittedRange);
+        $dietOutcome = null;
 
-        return Response::html(self::render($submittedRange, $outcome));
+        // Dietitian call only when the CBT path had enough entries to run, and
+        // only when food data exists (the diet service itself skips otherwise).
+        if ($this->dietSummaryService !== null && !$outcome->isInsufficientData()) {
+            $dietOutcome = $this->dietSummaryService->analyse($owner, $submittedRange);
+        }
+
+        return Response::html(self::render($submittedRange, $outcome, $dietOutcome));
     }
 
     /**
@@ -154,7 +168,7 @@ final class SummaryController
         return Operation::readDiaryData('summary.view', $request->pathWithQuery());
     }
 
-    public static function render(DateRange $formRange, ?SummaryOutcome $outcome): string
+    public static function render(DateRange $formRange, ?SummaryOutcome $outcome, ?DietSummaryOutcome $dietOutcome = null): string
     {
         $safeHeading = htmlspecialchars(self::HEADING, ENT_QUOTES, 'UTF-8');
 
@@ -179,6 +193,7 @@ final class SummaryController
             . self::renderRangePicker($formRange)
             . '        </div>' . "\n"
             . ($outcome !== null ? self::renderOutcome($outcome) : '')
+            . ($dietOutcome !== null ? self::renderDietOutcome($dietOutcome) : '')
             . '    </main>' . "\n"
             . '</body>' . "\n"
             . '</html>' . "\n";
@@ -220,6 +235,59 @@ final class SummaryController
             . $body
             . FeedbackView::renderDisclaimer()
             . '        </div>' . "\n";
+    }
+
+    private static function renderDietOutcome(DietSummaryOutcome $outcome): string
+    {
+        if ($outcome->isSkipped()) {
+            return '';
+        }
+
+        if ($outcome->isUnavailable()) {
+            $safeReason = htmlspecialchars(
+                $outcome->reason() ?? DietSummaryOutcome::UNAVAILABLE_MESSAGE,
+                ENT_QUOTES,
+                'UTF-8'
+            );
+
+            return '        <div class="ai-diet card card--spotlight">' . "\n"
+                . '            <p class="notice">' . $safeReason . '</p>' . "\n"
+                . self::renderDietDisclaimer()
+                . '        </div>' . "\n";
+        }
+
+        return '        <div class="ai-diet card card--spotlight">' . "\n"
+            . self::renderDietNotes($outcome->summaryValue())
+            . self::renderDietDisclaimer()
+            . '        </div>' . "\n";
+    }
+
+    private static function renderDietDisclaimer(): string
+    {
+        $safe = htmlspecialchars(DietSummaryOutcome::DISCLAIMER_MESSAGE, ENT_QUOTES, 'UTF-8');
+
+        return '            <p class="disclaimer">' . $safe . '</p>' . "\n";
+    }
+
+    private static function renderDietNotes(DietSummary $summary): string
+    {
+        $safeHeading = htmlspecialchars(self::DIET_NOTES_HEADING, ENT_QUOTES, 'UTF-8');
+
+        return '            <div class="diet-notes">' . "\n"
+            . '                <h3 class="diet-notes__heading">' . $safeHeading . '</h3>' . "\n"
+            . self::renderDietSection('Overview', $summary->overview())
+            . self::renderDietSection('Patterns', $summary->patterns())
+            . self::renderDietSection('Food and how the days felt', $summary->moodLinks())
+            . self::renderDietSection('Suggestion', $summary->suggestion())
+            . '            </div>' . "\n";
+    }
+
+    private static function renderDietSection(string $label, string $body): string
+    {
+        return '                <div class="diet-notes__section">' . "\n"
+            . '                    <h4 class="diet-notes__label">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</h4>' . "\n"
+            . '                    <p>' . htmlspecialchars($body, ENT_QUOTES, 'UTF-8') . '</p>' . "\n"
+            . '                </div>' . "\n";
     }
 
     private static function renderUnavailable(SummaryOutcome $outcome): string

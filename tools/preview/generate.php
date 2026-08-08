@@ -150,6 +150,9 @@ try {
         'preview-csrf-token',
         null,
         null,
+        [
+            ['type' => 'breakfast', 'description' => '', 'notes' => ''],
+        ],
     ));
 
     // Saved entry with a generated recommendation.
@@ -157,14 +160,34 @@ try {
         'You made time for connection and movement today - both support mood.',
         'Tomorrow, try writing down one thing you are looking forward to.',
     ));
+    $foodDiary = \Diary\Diary\FoodDiary::of([
+        \Diary\Diary\FoodMeal::of(\Diary\Diary\FoodMeal::TYPE_BREAKFAST, 'Oats with berries', 'Felt steady'),
+        \Diary\Diary\FoodMeal::of(\Diary\Diary\FoodMeal::TYPE_LUNCH, 'Chicken salad'),
+    ]);
+    $savedEntryWithFood = DiaryEntry::of(
+        Ulid::generate(),
+        $ownerId,
+        DiaryEntryInput::of(
+            date: $entryDate,
+            moodRating: 8,
+            sleepQuality: 4,
+            events: 'Went for a long walk in the park and had coffee with a friend.',
+            thoughts: 'Felt calmer than usual, less racing thoughts.',
+            emotions: 'Content, a little tired.',
+            foodDiary: $foodDiary,
+        ),
+        new DateTimeImmutable('2025-06-01 20:00:00'),
+        new DateTimeImmutable('2025-06-01 20:00:00'),
+    );
     $write('diary-entry-saved.html', DiaryEntryController::render(
         $questions,
-        $savedEntry->input()->toSubmittedAnswers(),
+        $savedEntryWithFood->input()->toSubmittedAnswers(),
         null,
         [],
         'preview-csrf-token',
-        $savedEntry,
+        $savedEntryWithFood,
         $recommendation,
+        \Diary\Diary\FoodMealsParser::rowsForRedisplay([], $foodDiary),
     ));
 
     // Saved entry with feedback unavailable.
@@ -275,6 +298,16 @@ try {
     $write('summary-insufficient-data.html', SummaryController::render($summaryRange, SummaryOutcome::insufficientData()));
     $write('summary-unavailable.html', SummaryController::render($summaryRange, SummaryOutcome::unavailable()));
     $write('summary-picker-only.html', SummaryController::render($summaryRange, null));
+    $write('summary-with-diet.html', SummaryController::render(
+        $summaryRange,
+        $summaryWithMetrics,
+        \Diary\Ai\DietSummaryOutcome::notes(new \Diary\Ai\DietSummary(
+            'Across this stretch you tended to eat three meals on the steadier days.',
+            'Breakfast showed up most mornings; late snacks clustered on lower-mood evenings.',
+            'Days with a proper lunch lined up with slightly higher mood ratings in the diary.',
+            'Try keeping one easy protein option ready for lunch on busy days.',
+        )),
+    ));
 
     // ---------------------------------------------------------------------
     // 4b. Bright spots page

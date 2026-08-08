@@ -14,6 +14,7 @@ use Diary\Diary\CalendarMonth;
 use Diary\Diary\CalendarService;
 use Diary\Diary\DiaryEntry;
 use Diary\Diary\DiaryService;
+use Diary\Diary\FoodDiary;
 use Diary\Diary\QuestionDefinition;
 use Diary\Diary\QuestionSet;
 use Diary\Support\Clock;
@@ -311,7 +312,37 @@ final class CalendarController
         }
 
         return '            <div class="day-scores">' . "\n" . $scores . '            </div>' . "\n"
-            . '            <div class="day-answers">' . "\n" . $answers . '            </div>' . "\n";
+            . '            <div class="day-answers">' . "\n" . $answers . '            </div>' . "\n"
+            . self::renderFoodDiary($entry->input()->foodDiary());
+    }
+
+    private static function renderFoodDiary(FoodDiary $foodDiary): string
+    {
+        if ($foodDiary->isEmpty()) {
+            return '';
+        }
+
+        $items = '';
+        foreach ($foodDiary->meals() as $meal) {
+            $safeType = htmlspecialchars($meal->typeLabel(), ENT_QUOTES, 'UTF-8');
+            $safeDescription = htmlspecialchars($meal->description(), ENT_QUOTES, 'UTF-8');
+            $notes = $meal->notes() === ''
+                ? ''
+                : '                    <p class="day-food__notes">' . htmlspecialchars($meal->notes(), ENT_QUOTES, 'UTF-8') . '</p>' . "\n";
+
+            $items .= '                <li class="day-food__item">' . "\n"
+                . '                    <span class="day-food__type">' . $safeType . '</span>' . "\n"
+                . '                    <p class="day-food__description">' . $safeDescription . '</p>' . "\n"
+                . $notes
+                . '                </li>' . "\n";
+        }
+
+        return '            <section class="day-food" aria-label="Food diary">' . "\n"
+            . '                <h3 class="day-food__heading">Food diary</h3>' . "\n"
+            . '                <ul class="day-food__list">' . "\n"
+            . $items
+            . '                </ul>' . "\n"
+            . '            </section>' . "\n";
     }
 
     /**

@@ -267,4 +267,74 @@ final class SummaryControllerTest extends TestCase
         self::assertStringContainsString('trend-panel', $html);
         self::assertStringContainsString('Mood rating', $html);
     }
+
+    public function testDietNotesRenderWhenTheDietServiceReturnsNotes(): void
+    {
+        $context = $this->ownerContext();
+        $owner = $this->access->resolveDataOwner($context);
+        $this->createEntries($owner, ['2025-03-01', '2025-03-02', '2025-03-03']);
+
+        $stats = SeriesStats::of(3, 6.0, 5, 7, TrendDirection::Stable);
+        $this->provider->queue(new ProgressSummary(
+            'Mood has been steady this month.',
+            new CbtAdvice('pattern', 'distortions', 'balanced perspective', 'next action'),
+            TrendMetrics::of(3, $stats, $stats)
+        ));
+
+        $dietService = new \Diary\Ai\AiDietSummaryService(
+            $this->diaryService,
+            new class implements \Diary\Ai\DietSummaryProvider {
+                public function generate(\Diary\Ai\DietSummaryInput $input): \Diary\Ai\DietSummary
+                {
+                    return new \Diary\Ai\DietSummary(
+                        'You ate regularly.',
+                        'Breakfast showed up often.',
+                        'Mood was steadier on fuller days.',
+                        'Keep a protein note at lunch.',
+                    );
+                }
+            }
+        );
+
+        // Seed one food meal day so the diet service is not skipped.
+        $this->diaryService->submitEntry(
+            $owner,
+            \Diary\Diary\DiaryValidation::accepted(
+                \Diary\Diary\DiaryEntryInput::of(
+                    date: LocalDate::fromString('2025-03-01'),
+                    moodRating: 6,
+                    sleepQuality: 3,
+                    foodDiary: \Diary\Diary\FoodDiary::of([
+                        \Diary\Diary\FoodMeal::of(\Diary\Diary\FoodMeal::TYPE_BREAKFAST, 'Oats'),
+                    ]),
+                ),
+                \Diary\Diary\SubmittedAnswers::blank(),
+            ),
+            $this->clock,
+        );
+
+        $controller = new SummaryController($this->access, $this->controllerService(), $this->clock, $dietService);
+
+        $response = $controller->show($this->getRequest($context, [
+            SummaryController::START_PARAM => '2025-03-01',
+            SummaryController::END_PARAM => '2025-03-31',
+        ]));
+
+        $html = $response->body();
+        self::assertStringContainsString(
+            htmlspecialchars(SummaryController::DIET_NOTES_HEADING, ENT_QUOTES, 'UTF-8'),
+            $html,
+        );
+        self::assertStringContainsString('You ate regularly.', $html);
+        self::assertStringContainsString(\Diary\Ai\DietSummaryOutcome::DISCLAIMER_MESSAGE, $html);
+    }
+
+    private function controllerService(): AiSummaryService
+    {
+        return new AiSummaryService(
+            $this->diaryService,
+            $this->milestoneService,
+            $this->provider,
+        );
+    }
 }

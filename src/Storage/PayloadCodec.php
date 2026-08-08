@@ -34,16 +34,20 @@ use JsonException;
  */
 final class PayloadCodec
 {
-    /** The version written into every payload this build produces. */
-    public const SCHEMA_VERSION = 1;
+    /**
+     * The version written into every payload this build produces.
+     * Version 2 adds optional `food_meals` on diary entries; CBT and milestone
+     * documents keep the same fields and simply stamp the current version.
+     */
+    public const SCHEMA_VERSION = 2;
 
     /**
-     * Versions this build can read. A future migration adds a version here and
-     * keeps the older reader until every row has been re-encoded.
+     * Versions this build can read. Version 1 diary rows decode with an empty
+     * food diary; version 2 carries `food_meals`.
      *
      * @var list<int>
      */
-    private const READABLE_SCHEMA_VERSIONS = [1];
+    private const READABLE_SCHEMA_VERSIONS = [1, 2];
 
     private const MOOD_MIN = 1;
     private const MOOD_MAX = 10;
@@ -195,6 +199,7 @@ final class PayloadCodec
                 'events' => self::optionalText($shape, $payload, 'events'),
                 'thoughts' => self::optionalText($shape, $payload, 'thoughts'),
                 'emotions' => self::optionalText($shape, $payload, 'emotions'),
+                'food_meals' => self::optionalFoodMeals($shape, $payload),
                 'schema_version' => self::SCHEMA_VERSION,
             ],
             PayloadShape::CbtRecommendation => [
@@ -342,5 +347,95 @@ final class PayloadCodec
         }
 
         return $value;
+    }
+
+    /**
+     * Absent or null food_meals becomes an empty list. Each retained meal needs
+     * a closed type, a non-blank description, and optional notes text.
+     *
+     * @param array<string, mixed> $payload
+     *
+     * @return list<array{type: string, description: string, notes: string}>
+     */
+    private static function optionalFoodMeals(PayloadShape $shape, array $payload): array
+    {
+        if (!array_key_exists('food_meals', $payload) || $payload['food_meals'] === null) {
+            return [];
+        }
+
+        $rows = $payload['food_meals'];
+
+        if (!is_array($rows) || ($rows !== [] && !array_is_list($rows))) {
+            throw PayloadException::invalidField($shape, 'food_meals', 'must be a list of meals');
+        }
+
+        if (count($rows) > 12) {
+            throw PayloadException::invalidField($shape, 'food_meals', 'must hold at most 12 meals');
+        }
+
+        $meals = [];
+
+        foreach ($rows as $index => $row) {
+            if (!is_array($row) || array_is_list($row)) {
+                throw PayloadException::invalidField(
+                    $shape,
+                    'food_meals',
+                    sprintf('entry %d must be an object with type, description and notes', $index)
+                );
+            }
+
+            /** @var array<string, mixed> $row */
+            $unknown = array_values(array_diff(array_keys($row), ['type', 'description', 'notes']));
+            if ($unknown !== []) {
+                throw PayloadException::invalidField(
+                    $shape,
+                    'food_meals',
+                    sprintf('entry %d carries unknown fields: %s', $index, implode(', ', $unknown))
+                );
+            }
+
+            if (!array_key_exists('type', $row) || $row['type'] === null) {
+                throw PayloadException::invalidField($shape, 'food_meals', sprintf('entry %d requires type', $index));
+            }
+
+            $type = self::text($shape, $row['type'], 'food_meals');
+            if (!in_array($type, PayloadShape::FOOD_MEAL_TYPES, true)) {
+                throw PayloadException::invalidField(
+                    $shape,
+                    'food_meals',
+                    sprintf('entry %d type must be one of %s', $index, implode(', ', PayloadShape::FOOD_MEAL_TYPES))
+                );
+            }
+
+            if (!array_key_exists('description', $row) || $row['description'] === null) {
+                throw PayloadException::invalidField(
+                    $shape,
+                    'food_meals',
+                    sprintf('entry %d requires description', $index)
+                );
+            }
+
+            $description = self::text($shape, $row['description'], 'food_meals');
+            if (trim($description) === '') {
+                throw PayloadException::invalidField(
+                    $shape,
+                    'food_meals',
+                    sprintf('entry %d description must not be blank', $index)
+                );
+            }
+
+            $notes = '';
+            if (array_key_exists('notes', $row) && $row['notes'] !== null) {
+                $notes = self::text($shape, $row['notes'], 'food_meals');
+            }
+
+            $meals[] = [
+                'type' => $type,
+                'description' => $description,
+                'notes' => $notes,
+            ];
+        }
+
+        return $meals;
     }
 }

@@ -27,7 +27,10 @@ final class DiaryInputValidator
     /** Error catalogue wording for Requirements 5.2, 5.5 (missing or out of range). */
     public const MOOD_RATING_MESSAGE = 'Please give a mood rating from 1 to 10';
 
-    public function validate(SubmittedAnswers $answers): DiaryValidation
+    /**
+     * @param array<string, mixed> $form raw POST params for optional food_meal rows
+     */
+    public function validate(SubmittedAnswers $answers, array $form = []): DiaryValidation
     {
         $moodRating = $this->parseScaleAnswer(
             $answers,
@@ -58,6 +61,11 @@ final class DiaryInputValidator
             ]);
         }
 
+        $food = FoodMealsParser::parse($form);
+        if (is_array($food)) {
+            return DiaryValidation::rejected($answers, $food[0], $food[1]);
+        }
+
         $input = DiaryEntryInput::of(
             date: $date,
             moodRating: $moodRating,
@@ -65,6 +73,7 @@ final class DiaryInputValidator
             events: $answers->value(QuestionSet::EVENTS),
             thoughts: $answers->value(QuestionSet::THOUGHTS),
             emotions: $answers->value(QuestionSet::EMOTIONS),
+            foodDiary: $food,
         );
 
         return DiaryValidation::accepted($input, $answers);

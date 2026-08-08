@@ -25,11 +25,11 @@ final class Request
     private const STATE_CHANGING_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
     /**
-     * @param array<string, string>  $query      query string parameters
-     * @param array<string, string>  $form       parsed request body parameters
-     * @param array<string, string>  $cookies    request cookies
-     * @param array<string, string>  $headers    header name (lower-case) => value
-     * @param array<string, mixed>   $attributes values derived by middleware
+     * @param array<string, string>          $query      query string parameters
+     * @param array<string, string|array>    $form       parsed request body parameters
+     * @param array<string, string>          $cookies    request cookies
+     * @param array<string, string>          $headers    header name (lower-case) => value
+     * @param array<string, mixed>           $attributes values derived by middleware
      */
     private function __construct(
         public readonly string $method,
@@ -48,10 +48,10 @@ final class Request
      * Build a request from explicit parts. Used by tests and by
      * {@see fromGlobals()}; there is no other constructor.
      *
-     * @param array<string, string> $query
-     * @param array<string, string> $form
-     * @param array<string, string> $cookies
-     * @param array<string, string> $headers header names are matched case-insensitively
+     * @param array<string, string>       $query
+     * @param array<string, string|array> $form
+     * @param array<string, string>       $cookies
+     * @param array<string, string>       $headers header names are matched case-insensitively
      */
     public static function of(
         string $method,
@@ -127,7 +127,7 @@ final class Request
             $queryString,
             self::isSecureConnection($server, $headers, $trustForwardedProto),
             self::stringMap($query),
-            self::stringMap($form),
+            self::formMap($form),
             self::stringMap($cookies),
             $headers,
         );
@@ -158,7 +158,9 @@ final class Request
 
     public function formParam(string $name): ?string
     {
-        return $this->form[$name] ?? null;
+        $value = $this->form[$name] ?? null;
+
+        return is_string($value) ? $value : null;
     }
 
     public function cookie(string $name): ?string
@@ -177,7 +179,9 @@ final class Request
         return $this->cookies;
     }
 
-    /** @return array<string, string> */
+    /**
+     * @return array<string, string|array>
+     */
     public function formParams(): array
     {
         return $this->form;
@@ -315,9 +319,59 @@ final class Request
             } elseif (is_int($value) || is_float($value) || is_bool($value)) {
                 $strings[(string) $name] = (string) $value;
             }
-            // Arrays and nulls are dropped: no handler in this application takes them.
+            // Arrays and nulls are dropped from query/cookies.
         }
 
         return $strings;
+    }
+
+    /**
+     * Form bodies may carry nested arrays (e.g. `food_meal[0][description]`).
+     * Scalars are stringified; nested arrays are walked the same way. Nulls
+     * and objects are dropped.
+     *
+     * @param array<string, mixed> $values
+     * @return array<string, string|array>
+     */
+    private static function formMap(array $values): array
+    {
+        $mapped = [];
+
+        foreach ($values as $name => $value) {
+            $key = (string) $name;
+
+            if (is_string($value)) {
+                $mapped[$key] = $value;
+            } elseif (is_int($value) || is_float($value) || is_bool($value)) {
+                $mapped[$key] = (string) $value;
+            } elseif (is_array($value)) {
+                $mapped[$key] = self::nestedFormArray($value);
+            }
+        }
+
+        return $mapped;
+    }
+
+    /**
+     * @param array<mixed> $values
+     * @return array<int|string, string|array>
+     */
+    private static function nestedFormArray(array $values): array
+    {
+        $mapped = [];
+
+        foreach ($values as $name => $value) {
+            $key = is_int($name) ? $name : (string) $name;
+
+            if (is_array($value)) {
+                $mapped[$key] = self::nestedFormArray($value);
+            } elseif (is_string($value)) {
+                $mapped[$key] = $value;
+            } elseif (is_int($value) || is_float($value) || is_bool($value)) {
+                $mapped[$key] = (string) $value;
+            }
+        }
+
+        return $mapped;
     }
 }

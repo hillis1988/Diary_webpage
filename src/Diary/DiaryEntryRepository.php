@@ -228,6 +228,9 @@ final class DiaryEntryRepository
             events: (string) $payload['events'],
             thoughts: (string) $payload['thoughts'],
             emotions: (string) $payload['emotions'],
+            foodDiary: FoodDiary::fromPayload(
+                is_array($payload['food_meals'] ?? null) ? $payload['food_meals'] : []
+            ),
         );
 
         $createdAt = SqlTimestamp::parse($row['created_at']);
